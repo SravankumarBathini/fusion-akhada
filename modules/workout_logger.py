@@ -32,6 +32,7 @@ def _parse_reps(reps_value):
     "5–8"
     into a sensible default integer.
     """
+
     if isinstance(reps_value, int):
         return reps_value
 
@@ -46,6 +47,7 @@ def _parse_reps(reps_value):
     for separator in ("-", "–", "—", "to"):
         if separator in text:
             first = text.split(separator)[0].strip()
+
             try:
                 return int(float(first))
             except ValueError:
@@ -59,7 +61,13 @@ def _parse_reps(reps_value):
 
 def _get_planned_sets(exercise):
     return _safe_int(
-        exercise.get("sets", exercise.get("planned_sets", 3)),
+        exercise.get(
+            "sets",
+            exercise.get(
+                "planned_sets",
+                3,
+            ),
+        ),
         3,
     )
 
@@ -68,7 +76,10 @@ def _get_planned_reps(exercise):
     return _parse_reps(
         exercise.get(
             "reps",
-            exercise.get("planned_reps", 8),
+            exercise.get(
+                "planned_reps",
+                8,
+            ),
         )
     )
 
@@ -85,24 +96,44 @@ def _calculate_workout_totals(session):
     total_volume = 0.0
     completed_exercises = 0
 
-    for exercise in session.get("exercises", []):
+    for exercise in session.get(
+        "exercises",
+        [],
+    ):
+
         exercise_completed = False
 
-        for set_data in exercise.get("sets", []):
-            if set_data.get("completed", False):
+        for set_data in exercise.get(
+            "sets",
+            [],
+        ):
+
+            if set_data.get(
+                "completed",
+                False,
+            ):
+
                 total_sets += 1
 
                 weight = _safe_float(
-                    set_data.get("weight_kg", 0)
+                    set_data.get(
+                        "weight_kg",
+                        0,
+                    )
                 )
 
                 reps = _safe_int(
-                    set_data.get("actual_reps", 0)
+                    set_data.get(
+                        "actual_reps",
+                        0,
+                    )
                 )
 
-                total_volume += _calculate_set_volume(
-                    weight,
-                    reps,
+                total_volume += (
+                    _calculate_set_volume(
+                        weight,
+                        reps,
+                    )
                 )
 
                 exercise_completed = True
@@ -121,12 +152,15 @@ def _load_history(history_file):
     path = Path(history_file)
 
     try:
+
         if path.exists():
+
             with open(
                 path,
                 "r",
                 encoding="utf-8",
             ) as file:
+
                 data = json.load(file)
 
                 if isinstance(data, list):
@@ -141,7 +175,11 @@ def _load_history(history_file):
     return []
 
 
-def _save_history(history_file, history, save_json_function):
+def _save_history(
+    history_file,
+    history,
+    save_json_function,
+):
     save_json_function(
         history_file,
         history,
@@ -161,25 +199,42 @@ def _get_previous_performance(
     for an exercise.
     """
 
-    for workout in reversed(workout_history):
-        for exercise in workout.get("exercises", []):
+    for workout in reversed(
+        workout_history
+    ):
+
+        for exercise in workout.get(
+            "exercises",
+            [],
+        ):
 
             if (
-                exercise.get("name", "").strip().lower()
+                exercise.get(
+                    "name",
+                    "",
+                ).strip().lower()
                 == exercise_name.strip().lower()
             ):
 
-                sets = exercise.get("sets", [])
+                sets = exercise.get(
+                    "sets",
+                    [],
+                )
 
                 completed_sets = [
                     item
                     for item in sets
-                    if item.get("completed", False)
+                    if item.get(
+                        "completed",
+                        False,
+                    )
                 ]
 
                 if completed_sets:
 
-                    last_set = completed_sets[-1]
+                    last_set = (
+                        completed_sets[-1]
+                    )
 
                     return {
                         "weight_kg": last_set.get(
@@ -206,7 +261,10 @@ def _initialize_session(workout_plan):
 
     exercises = []
 
-    for exercise in workout_plan.get("exercises", []):
+    for exercise in workout_plan.get(
+        "exercises",
+        [],
+    ):
 
         planned_sets = _get_planned_sets(
             exercise
@@ -222,6 +280,7 @@ def _initialize_session(workout_plan):
             1,
             planned_sets + 1,
         ):
+
             sets.append(
                 {
                     "set_number": set_number,
@@ -268,14 +327,109 @@ def _initialize_session(workout_plan):
 
 def _ensure_session_state():
 
-    if "active_workout_session" not in st.session_state:
-        st.session_state.active_workout_session = None
+    if (
+        "active_workout_session"
+        not in st.session_state
+    ):
 
-    if "workout_session_started" not in st.session_state:
-        st.session_state.workout_session_started = False
+        st.session_state.active_workout_session = (
+            None
+        )
 
-    if "selected_workout_day" not in st.session_state:
-        st.session_state.selected_workout_day = 0
+    if (
+        "workout_session_started"
+        not in st.session_state
+    ):
+
+        st.session_state.workout_session_started = (
+            False
+        )
+
+    if (
+        "selected_workout_day"
+        not in st.session_state
+    ):
+
+        st.session_state.selected_workout_day = (
+            0
+        )
+
+
+# ============================================================
+# SAVE COMPLETED WORKOUT
+# ============================================================
+
+def _save_completed_workout(
+    completed_workout,
+    history_file,
+    save_json_function,
+    save_supabase_function,
+    profile_id,
+    use_supabase,
+):
+    """
+    Save completed workout.
+
+    Supabase is the primary storage when enabled.
+    Local JSON is used as fallback.
+    """
+
+    # --------------------------------------------------------
+    # SUPABASE PRIMARY STORAGE
+    # --------------------------------------------------------
+
+    if (
+        use_supabase
+        and profile_id
+        and save_supabase_function
+    ):
+
+        try:
+
+            saved_result = (
+                save_supabase_function(
+                    profile_id,
+                    completed_workout,
+                )
+            )
+
+            if saved_result is not False:
+                return "supabase"
+
+            raise RuntimeError(
+                "Supabase did not confirm the workout save."
+            )
+
+        except Exception as error:
+
+            st.warning(
+                "Workout could not be saved to Supabase. "
+                "Saving a local backup instead."
+            )
+
+            st.caption(
+                f"Supabase save error: {error}"
+            )
+
+    # --------------------------------------------------------
+    # LOCAL FALLBACK
+    # --------------------------------------------------------
+
+    history = _load_history(
+        history_file
+    )
+
+    history.append(
+        completed_workout
+    )
+
+    _save_history(
+        history_file,
+        history,
+        save_json_function,
+    )
+
+    return "local"
 
 
 # ============================================================
@@ -287,15 +441,20 @@ def render_workout_logger(
     workout_history,
     history_file,
     save_json_function,
+    save_supabase_function=None,
+    profile_id=None,
+    use_supabase=False,
 ):
 
     _ensure_session_state()
 
     if not workout_plan:
+
         st.info(
             "Generate a workout plan first."
         )
-        return
+
+        return workout_history
 
     # ========================================================
     # SESSION MODE
@@ -312,6 +471,7 @@ def render_workout_logger(
         for index, workout_day in enumerate(
             workout_plan
         ):
+
             day_number = workout_day.get(
                 "day",
                 index + 1,
@@ -329,7 +489,8 @@ def render_workout_logger(
         selected_day = st.selectbox(
             "Choose workout",
             range(len(day_names)),
-            format_func=lambda index: day_names[index],
+            format_func=lambda index:
+                day_names[index],
             key="workout_day_selector",
         )
 
@@ -349,18 +510,21 @@ def render_workout_logger(
         col1, col2, col3 = st.columns(3)
 
         with col1:
+
             st.metric(
                 "Duration",
                 f"{selected_workout.get('duration', 45)} min",
             )
 
         with col2:
+
             st.metric(
                 "Exercises",
                 len(exercises),
             )
 
         with col3:
+
             st.metric(
                 "Intensity",
                 selected_workout.get(
@@ -411,7 +575,7 @@ def render_workout_logger(
 
                 st.rerun()
 
-        return
+        return workout_history
 
     # ========================================================
     # ACTIVE WORKOUT
@@ -422,9 +586,14 @@ def render_workout_logger(
     )
 
     if not session:
-        st.session_state.workout_session_started = False
+
+        st.session_state.workout_session_started = (
+            False
+        )
+
         st.rerun()
-        return
+
+        return workout_history
 
     selected_day = (
         st.session_state.selected_workout_day
@@ -444,7 +613,9 @@ def render_workout_logger(
     )
 
     if started_at:
+
         try:
+
             started = datetime.fromisoformat(
                 started_at
             )
@@ -464,24 +635,29 @@ def render_workout_logger(
             pass
 
     total_sets, total_volume, completed_exercises = (
-        _calculate_workout_totals(session)
+        _calculate_workout_totals(
+            session
+        )
     )
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
+
         st.metric(
             "Exercises Completed",
             completed_exercises,
         )
 
     with col2:
+
         st.metric(
             "Sets Completed",
             total_sets,
         )
 
     with col3:
+
         st.metric(
             "Volume",
             f"{total_volume:,.1f} kg",
@@ -494,7 +670,10 @@ def render_workout_logger(
     # ========================================================
 
     for exercise_index, exercise in enumerate(
-        session.get("exercises", [])
+        session.get(
+            "exercises",
+            [],
+        )
     ):
 
         exercise_name = exercise.get(
@@ -539,6 +718,7 @@ def render_workout_logger(
             col1, col2, col3 = st.columns(3)
 
             with col1:
+
                 st.write(
                     f"**Planned:** "
                     f"{planned_sets} × {planned_reps}"
@@ -547,17 +727,21 @@ def render_workout_logger(
             with col2:
 
                 if previous:
+
                     st.write(
                         f"**Previous:** "
                         f"{previous.get('weight_kg', 0)} kg × "
                         f"{previous.get('actual_reps', 0)}"
                     )
+
                 else:
+
                     st.write(
                         "**Previous:** No data"
                     )
 
             with col3:
+
                 st.write(
                     f"**Equipment:** "
                     f"{exercise.get('equipment', '-')}"
@@ -570,7 +754,10 @@ def render_workout_logger(
             # ------------------------------------------------
 
             for set_index, set_data in enumerate(
-                exercise.get("sets", [])
+                exercise.get(
+                    "sets",
+                    [],
+                )
             ):
 
                 set_number = set_index + 1
@@ -582,6 +769,7 @@ def render_workout_logger(
                 )
 
                 with col1:
+
                     st.write(
                         f"**Set {set_number}**"
                     )
@@ -663,9 +851,12 @@ def render_workout_logger(
                 and planned_sets > 0
             )
 
-            exercise["completed"] = all_completed
+            exercise["completed"] = (
+                all_completed
+            )
 
             if all_completed:
+
                 st.success(
                     "Exercise completed! ✅"
                 )
@@ -790,31 +981,60 @@ def render_workout_logger(
                 ),
             }
 
-            history = _load_history(
-                history_file
+            # ------------------------------------------------
+            # SAVE TO SUPABASE / LOCAL
+            # ------------------------------------------------
+
+            storage_used = _save_completed_workout(
+                completed_workout=completed_workout,
+                history_file=history_file,
+                save_json_function=save_json_function,
+                save_supabase_function=save_supabase_function,
+                profile_id=profile_id,
+                use_supabase=use_supabase,
             )
 
-            history.append(
+            # ------------------------------------------------
+            # UPDATE LOCAL SESSION HISTORY
+            # ------------------------------------------------
+
+            updated_history = list(
+                workout_history or []
+            )
+
+            updated_history.append(
                 completed_workout
             )
 
-            _save_history(
-                history_file,
-                history,
-                save_json_function,
-            )
-
             st.session_state.workout_history = (
-                history
+                updated_history
             )
 
             # Clear active session
-            st.session_state.active_workout_session = None
-            st.session_state.workout_session_started = False
 
-            st.success(
-                "🎉 Workout completed and saved!"
+            st.session_state.active_workout_session = (
+                None
             )
+
+            st.session_state.workout_session_started = (
+                False
+            )
+
+            # ------------------------------------------------
+            # SUCCESS MESSAGE
+            # ------------------------------------------------
+
+            if storage_used == "supabase":
+
+                st.success(
+                    "🎉 Workout completed and saved to Supabase!"
+                )
+
+            else:
+
+                st.success(
+                    "🎉 Workout completed and saved locally!"
+                )
 
             st.balloons()
 
@@ -831,24 +1051,28 @@ def render_workout_logger(
             )
 
             with col1:
+
                 st.metric(
                     "Exercises",
                     completed_exercises,
                 )
 
             with col2:
+
                 st.metric(
                     "Sets",
                     total_sets,
                 )
 
             with col3:
+
                 st.metric(
                     "Volume",
                     f"{total_volume:,.1f} kg",
                 )
 
             with col4:
+
                 st.metric(
                     "Duration",
                     (
@@ -858,10 +1082,21 @@ def render_workout_logger(
                     ),
                 )
 
-            st.info(
-                "Your workout has been added to Workout History "
-                "and will be used by Progress and AI Coach."
-            )
+            if storage_used == "supabase":
+
+                st.info(
+                    "Your workout has been saved to "
+                    "Supabase and will be available to "
+                    "Workout History, Progress, and AI Coach."
+                )
+
+            else:
+
+                st.info(
+                    "Your workout has been saved locally. "
+                    "It will be available to Workout History, "
+                    "Progress, and AI Coach."
+                )
 
             st.rerun()
 
@@ -876,8 +1111,13 @@ def render_workout_logger(
         type="secondary",
     ):
 
-        st.session_state.active_workout_session = None
-        st.session_state.workout_session_started = False
+        st.session_state.active_workout_session = (
+            None
+        )
+
+        st.session_state.workout_session_started = (
+            False
+        )
 
         st.warning(
             "Active workout cancelled. "
@@ -885,3 +1125,5 @@ def render_workout_logger(
         )
 
         st.rerun()
+
+    return workout_history

@@ -29,6 +29,19 @@ from modules.workout_logger import (
     render_workout_logger,
 )
 
+from utils.storage import (
+    load_json,
+    save_json,
+    is_supabase_available,
+    save_profile_to_supabase,
+    load_latest_profile_from_supabase,
+    get_latest_profile_id,
+    save_workout_plan_to_supabase,
+    load_latest_workout_plan_from_supabase,
+    save_workout_history_to_supabase,
+    load_workout_history_from_supabase,
+)
+
 
 # ============================================================
 # PAGE CONFIGURATION
@@ -45,8 +58,8 @@ st.set_page_config(
 # FILE PATHS
 # ============================================================
 
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(exist_ok=True)
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
 
 PROFILE_FILE = DATA_DIR / "profile.json"
 WORKOUT_PLAN_FILE = DATA_DIR / "workout_plan.json"
@@ -73,68 +86,175 @@ if "workout_history" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = "Dashboard"
 
+if "cloud_data_loaded" not in st.session_state:
+    st.session_state.cloud_data_loaded = False
+
+if "profile_id" not in st.session_state:
+    st.session_state.profile_id = None
+
+if "storage_source" not in st.session_state:
+    st.session_state.storage_source = "local"
+
 
 # ============================================================
-# JSON HELPERS
+# PERSISTENT DATA LOADING
 # ============================================================
 
-def load_json(file_path, default):
-    try:
-        if file_path.exists():
-            with open(file_path, "r", encoding="utf-8") as file:
-                return json.load(file)
-    except (json.JSONDecodeError, OSError):
-        pass
+def load_persistent_data():
+    """
+    Load application data.
 
-    return default
+    Priority:
 
+    1. Supabase
+    2. Local JSON fallback
 
-def save_json(file_path, data):
-    file_path = Path(file_path)
+    Exercises remain local because they are static reference data.
+    """
 
-    file_path.parent.mkdir(
-        parents=True,
-        exist_ok=True,
+    # --------------------------------------------------------
+    # LOCAL REFERENCE DATA
+    # --------------------------------------------------------
+
+    exercise_database = load_json(
+        EXERCISES_FILE,
+        [],
     )
 
-    with open(file_path, "w", encoding="utf-8") as file:
-        json.dump(
-            data,
-            file,
-            indent=4,
-            ensure_ascii=False,
-        )
+    # --------------------------------------------------------
+    # SUPABASE
+    # --------------------------------------------------------
+
+    if is_supabase_available():
+
+        try:
+
+            profile = load_latest_profile_from_supabase()
+
+            if profile:
+
+                profile_id = get_latest_profile_id()
+
+                workout_plan = []
+
+                if profile_id:
+
+                    cloud_plan = (
+                        load_latest_workout_plan_from_supabase(
+                            profile_id
+                        )
+                    )
+
+                    if cloud_plan:
+                        workout_plan = cloud_plan
+
+                # ------------------------------------------------
+                # WORKOUT HISTORY FROM SUPABASE
+                # ------------------------------------------------
+
+                workout_history = []
+
+                if profile_id:
+
+                    workout_history = (
+                        load_workout_history_from_supabase(
+                            profile_id
+                        )
+                    )
+
+                return (
+                    profile,
+                    workout_plan,
+                    workout_history,
+                    exercise_database,
+                    profile_id,
+                    "supabase",
+                )
+
+        except Exception as error:
+
+            st.warning(
+                "Supabase is configured, but cloud data could "
+                f"not be loaded. Using local data instead. "
+                f"Details: {error}"
+            )
+
+    # --------------------------------------------------------
+    # LOCAL FALLBACK
+    # --------------------------------------------------------
+
+    profile = load_json(
+        PROFILE_FILE,
+        {},
+    )
+
+    workout_plan = load_json(
+        WORKOUT_PLAN_FILE,
+        [],
+    )
+
+    workout_history = load_json(
+        WORKOUT_HISTORY_FILE,
+        [],
+    )
+
+    return (
+        profile,
+        workout_plan,
+        workout_history,
+        exercise_database,
+        None,
+        "local",
+    )
 
 
 # ============================================================
-# LOAD PERSISTENT DATA
+# LOAD DATA ONCE PER SESSION
 # ============================================================
 
-loaded_profile = load_json(
-    PROFILE_FILE,
-    {},
-)
+if not st.session_state.cloud_data_loaded:
 
-loaded_workout_plan = load_json(
-    WORKOUT_PLAN_FILE,
-    [],
-)
+    (
+        loaded_profile,
+        loaded_workout_plan,
+        loaded_workout_history,
+        exercise_database,
+        loaded_profile_id,
+        storage_source,
+    ) = load_persistent_data()
 
-loaded_workout_history = load_json(
-    WORKOUT_HISTORY_FILE,
-    [],
-)
+    st.session_state.profile = (
+        loaded_profile or {}
+    )
 
-st.session_state.profile = loaded_profile
-st.session_state.profile_created = bool(loaded_profile)
+    st.session_state.profile_created = bool(
+        loaded_profile
+    )
 
-st.session_state.workout_plan = loaded_workout_plan
-st.session_state.workout_history = loaded_workout_history
+    st.session_state.workout_plan = (
+        loaded_workout_plan or []
+    )
 
-exercise_database = load_json(
-    EXERCISES_FILE,
-    [],
-)
+    st.session_state.workout_history = (
+        loaded_workout_history or []
+    )
+
+    st.session_state.profile_id = (
+        loaded_profile_id
+    )
+
+    st.session_state.storage_source = (
+        storage_source
+    )
+
+    st.session_state.cloud_data_loaded = True
+
+else:
+
+    exercise_database = load_json(
+        EXERCISES_FILE,
+        [],
+    )
 
 
 # ============================================================
@@ -165,17 +285,25 @@ def safe_int(value, default=0):
 
 
 def get_workout_date(workout):
-    date_value = workout.get("date", "")
+    date_value = workout.get(
+        "date",
+        "",
+    )
 
     if not date_value:
         return None
 
     try:
+
         return datetime.strptime(
             str(date_value),
             "%Y-%m-%d",
         ).date()
-    except (TypeError, ValueError):
+
+    except (
+        TypeError,
+        ValueError,
+    ):
         return None
 
 
@@ -183,32 +311,57 @@ def calculate_total_volume(history):
     total_volume = 0.0
 
     for workout in history:
+
         workout_volume = safe_float(
-            workout.get("total_volume", 0)
+            workout.get(
+                "total_volume",
+                0,
+            )
         )
 
         if workout_volume:
+
             total_volume += workout_volume
+
             continue
 
-        exercises = workout.get("exercises", [])
+        exercises = workout.get(
+            "exercises",
+            [],
+        )
 
         for exercise in exercises:
-            sets = exercise.get("sets", [])
+
+            sets = exercise.get(
+                "sets",
+                [],
+            )
 
             for set_data in sets:
-                if not set_data.get("completed", False):
+
+                if not set_data.get(
+                    "completed",
+                    False,
+                ):
                     continue
 
                 weight = safe_float(
-                    set_data.get("weight_kg", 0)
+                    set_data.get(
+                        "weight_kg",
+                        0,
+                    )
                 )
 
                 reps = safe_int(
-                    set_data.get("actual_reps", 0)
+                    set_data.get(
+                        "actual_reps",
+                        0,
+                    )
                 )
 
-                total_volume += weight * reps
+                total_volume += (
+                    weight * reps
+                )
 
     return total_volume
 
@@ -217,10 +370,15 @@ def calculate_current_streak(history):
     completed_dates = set()
 
     for workout in history:
-        date_value = get_workout_date(workout)
+
+        date_value = get_workout_date(
+            workout
+        )
 
         if date_value:
-            completed_dates.add(date_value)
+            completed_dates.add(
+                date_value
+            )
 
     if not completed_dates:
         return 0
@@ -228,49 +386,84 @@ def calculate_current_streak(history):
     today = datetime.now().date()
 
     if today in completed_dates:
+
         current_date = today
-    elif today - timedelta(days=1) in completed_dates:
-        current_date = today - timedelta(days=1)
+
+    elif (
+        today - timedelta(days=1)
+        in completed_dates
+    ):
+
+        current_date = (
+            today - timedelta(days=1)
+        )
+
     else:
+
         return 0
 
     streak = 0
 
     while current_date in completed_dates:
+
         streak += 1
-        current_date -= timedelta(days=1)
+
+        current_date -= timedelta(
+            days=1
+        )
 
     return streak
 
 
 def get_week_start():
+
     today = datetime.now().date()
-    return today - timedelta(days=today.weekday())
+
+    return today - timedelta(
+        days=today.weekday()
+    )
 
 
-def get_completed_workouts_this_week(history):
+def get_completed_workouts_this_week(
+    history
+):
+
     week_start = get_week_start()
+
     today = datetime.now().date()
 
     count = 0
 
     for workout in history:
-        date_value = get_workout_date(workout)
 
-        if date_value and week_start <= date_value <= today:
+        date_value = get_workout_date(
+            workout
+        )
+
+        if (
+            date_value
+            and week_start
+            <= date_value
+            <= today
+        ):
+
             count += 1
 
     return count
 
 
-def get_next_workout(workout_plan, history):
+def get_next_workout(
+    workout_plan,
+    history,
+):
+
     if not workout_plan:
         return None
 
     today = datetime.now().date()
+
     weekday = today.weekday()
 
-    # Prefer a workout whose "day_of_week" matches today.
     weekday_names = [
         "Monday",
         "Tuesday",
@@ -281,73 +474,126 @@ def get_next_workout(workout_plan, history):
         "Sunday",
     ]
 
-    today_name = weekday_names[weekday]
+    today_name = weekday_names[
+        weekday
+    ]
 
     for workout in workout_plan:
+
         day_of_week = str(
-            workout.get("day_of_week", "")
+            workout.get(
+                "day_of_week",
+                "",
+            )
         ).strip()
 
-        if day_of_week.lower() == today_name.lower():
+        if (
+            day_of_week.lower()
+            == today_name.lower()
+        ):
+
             return workout
 
-    # Some plans use numeric day values.
     for workout in workout_plan:
-        day_value = workout.get("day")
 
-        if safe_int(day_value, -1) == weekday + 1:
+        day_value = workout.get(
+            "day"
+        )
+
+        if safe_int(
+            day_value,
+            -1,
+        ) == weekday + 1:
+
             return workout
 
-    # If no explicit day mapping exists,
-    # choose based on today's position in the week.
     if workout_plan:
-        index = weekday % len(workout_plan)
+
+        index = (
+            weekday
+            % len(workout_plan)
+        )
+
         return workout_plan[index]
 
     return None
 
 
-def get_recent_workouts(history, limit=3):
+def get_recent_workouts(
+    history,
+    limit=3,
+):
+
     valid_workouts = [
         workout
         for workout in history
-        if get_workout_date(workout) is not None
+        if get_workout_date(workout)
+        is not None
     ]
 
     valid_workouts.sort(
-        key=lambda workout: get_workout_date(workout),
+        key=lambda workout:
+        get_workout_date(workout),
         reverse=True,
     )
 
     return valid_workouts[:limit]
 
 
-def get_best_strength_highlights(history):
-    performance = get_exercise_performance(history)
+def get_best_strength_highlights(
+    history
+):
+
+    performance = (
+        get_exercise_performance(
+            history
+        )
+    )
 
     highlights = []
 
-    for exercise_name, entries in performance.items():
+    for (
+        exercise_name,
+        entries,
+    ) in performance.items():
+
         if not entries:
             continue
 
         best_entry = max(
             entries,
             key=lambda entry: (
-                safe_float(entry.get("weight_kg", 0)),
-                safe_int(entry.get("actual_reps", 0)),
+                safe_float(
+                    entry.get(
+                        "weight_kg",
+                        0,
+                    )
+                ),
+                safe_int(
+                    entry.get(
+                        "actual_reps",
+                        0,
+                    )
+                ),
             ),
         )
 
         weight = safe_float(
-            best_entry.get("weight_kg", 0)
+            best_entry.get(
+                "weight_kg",
+                0,
+            )
         )
 
         reps = safe_int(
-            best_entry.get("actual_reps", 0)
+            best_entry.get(
+                "actual_reps",
+                0,
+            )
         )
 
         if weight > 0 and reps > 0:
+
             highlights.append(
                 {
                     "exercise": exercise_name,
@@ -388,8 +634,14 @@ page_options = [
     "AI Coach",
 ]
 
-if st.session_state.page not in page_options:
-    st.session_state.page = "Dashboard"
+if (
+    st.session_state.page
+    not in page_options
+):
+
+    st.session_state.page = (
+        "Dashboard"
+    )
 
 selected_page = st.sidebar.radio(
     "Navigation",
@@ -399,7 +651,31 @@ selected_page = st.sidebar.radio(
     ),
 )
 
-st.session_state.page = selected_page
+st.session_state.page = (
+    selected_page
+)
+
+
+# ============================================================
+# STORAGE STATUS
+# ============================================================
+
+if (
+    st.session_state.get(
+        "storage_source"
+    )
+    == "supabase"
+):
+
+    st.sidebar.success(
+        "☁️ Cloud storage: Supabase"
+    )
+
+else:
+
+    st.sidebar.info(
+        "💾 Storage: Local JSON"
+    )
 
 
 # ============================================================
@@ -408,9 +684,17 @@ st.session_state.page = selected_page
 
 if st.session_state.page == "Dashboard":
 
-    profile = st.session_state.profile
-    workout_plan = st.session_state.workout_plan
-    workout_history = st.session_state.workout_history
+    profile = (
+        st.session_state.profile
+    )
+
+    workout_plan = (
+        st.session_state.workout_plan
+    )
+
+    workout_history = (
+        st.session_state.workout_history
+    )
 
     st.title("🏠 Dashboard")
 
@@ -430,7 +714,11 @@ if st.session_state.page == "Dashboard":
             "Create My Profile →",
             type="primary",
         ):
-            st.session_state.page = "My Profile"
+
+            st.session_state.page = (
+                "My Profile"
+            )
+
             st.rerun()
 
     else:
@@ -455,15 +743,11 @@ if st.session_state.page == "Dashboard":
         )
 
         st.caption(
-            f"Goal: **{fitness_goal}**  •  "
+            f"Goal: **{fitness_goal}** • "
             f"Level: **{fitness_level}**"
         )
 
         st.divider()
-
-        # ====================================================
-        # TRAINING SNAPSHOT
-        # ====================================================
 
         total_workouts = len(
             workout_history
@@ -475,29 +759,38 @@ if st.session_state.page == "Dashboard":
             )
         )
 
-        current_streak = calculate_current_streak(
-            workout_history
+        current_streak = (
+            calculate_current_streak(
+                workout_history
+            )
         )
 
-        total_volume = calculate_total_volume(
-            workout_history
+        total_volume = (
+            calculate_total_volume(
+                workout_history
+            )
         )
 
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4 = (
+            st.columns(4)
+        )
 
         with col1:
+
             st.metric(
                 "Total Workouts",
                 total_workouts,
             )
 
         with col2:
+
             st.metric(
                 "This Week",
                 workouts_this_week,
             )
 
         with col3:
+
             st.metric(
                 "Current Streak",
                 f"{current_streak} day"
@@ -505,16 +798,13 @@ if st.session_state.page == "Dashboard":
             )
 
         with col4:
+
             st.metric(
                 "Training Volume",
                 f"{total_volume:,.0f} kg",
             )
 
         st.divider()
-
-        # ====================================================
-        # TODAY / NEXT WORKOUT
-        # ====================================================
 
         st.subheader(
             "🏋️ Today's Training"
@@ -527,34 +817,42 @@ if st.session_state.page == "Dashboard":
 
         if next_workout:
 
-            workout_name = next_workout.get(
-                "name",
-                "Workout",
+            workout_name = (
+                next_workout.get(
+                    "name",
+                    "Workout",
+                )
             )
 
-            duration = next_workout.get(
-                "duration",
-                profile.get(
-                    "workout_duration",
-                    45,
-                ),
+            duration = (
+                next_workout.get(
+                    "duration",
+                    profile.get(
+                        "workout_duration",
+                        45,
+                    ),
+                )
             )
 
-            intensity = next_workout.get(
-                "intensity",
-                profile.get(
-                    "workout_intensity",
-                    "Moderate",
-                ),
+            intensity = (
+                next_workout.get(
+                    "intensity",
+                    profile.get(
+                        "workout_intensity",
+                        "Moderate",
+                    ),
+                )
             )
 
-            exercises = next_workout.get(
-                "exercises",
-                [],
+            exercises = (
+                next_workout.get(
+                    "exercises",
+                    [],
+                )
             )
 
-            col1, col2 = st.columns(
-                [3, 1]
+            col1, col2 = (
+                st.columns([3, 1])
             )
 
             with col1:
@@ -582,14 +880,22 @@ if st.session_state.page == "Dashboard":
                     type="primary",
                     use_container_width=True,
                 ):
-                    st.session_state.page = "My Workout"
+
+                    st.session_state.page = (
+                        "My Workout"
+                    )
+
                     st.rerun()
 
                 if st.button(
                     "View Full Workout",
                     use_container_width=True,
                 ):
-                    st.session_state.page = "My Workout"
+
+                    st.session_state.page = (
+                        "My Workout"
+                    )
+
                     st.rerun()
 
         else:
@@ -603,17 +909,37 @@ if st.session_state.page == "Dashboard":
                 type="primary",
             ):
 
-                new_plan = generate_weekly_plan(
-                    profile,
-                    exercise_database,
+                new_plan = (
+                    generate_weekly_plan(
+                        profile,
+                        exercise_database,
+                    )
                 )
 
-                st.session_state.workout_plan = new_plan
-
-                save_json(
-                    WORKOUT_PLAN_FILE,
-                    new_plan,
+                st.session_state.workout_plan = (
+                    new_plan
                 )
+
+                profile_id = (
+                    st.session_state.profile_id
+                )
+
+                if (
+                    profile_id
+                    and is_supabase_available()
+                ):
+
+                    save_workout_plan_to_supabase(
+                        profile_id,
+                        new_plan,
+                    )
+
+                else:
+
+                    save_json(
+                        WORKOUT_PLAN_FILE,
+                        new_plan,
+                    )
 
                 st.success(
                     "Your personalized workout plan "
@@ -623,10 +949,6 @@ if st.session_state.page == "Dashboard":
                 st.rerun()
 
         st.divider()
-
-        # ====================================================
-        # WEEKLY PROGRESS
-        # ====================================================
 
         st.subheader(
             "📅 Weekly Training Progress"
@@ -658,31 +980,42 @@ if st.session_state.page == "Dashboard":
             weekly_percentage / 100
         )
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3 = (
+            st.columns(3)
+        )
 
         with col1:
+
             st.metric(
                 "Completed",
                 workouts_this_week,
             )
 
         with col2:
+
             st.metric(
                 "Target",
                 planned_days,
             )
 
         with col3:
+
             st.metric(
                 "Completion",
                 f"{weekly_percentage}%",
             )
 
-        if workouts_this_week >= planned_days:
+        if (
+            workouts_this_week
+            >= planned_days
+        ):
+
             st.success(
                 "🎯 Weekly workout target reached!"
             )
+
         elif workouts_this_week > 0:
+
             remaining = (
                 planned_days
                 - workouts_this_week
@@ -693,24 +1026,24 @@ if st.session_state.page == "Dashboard":
                 f"{'s' if remaining != 1 else ''} "
                 "to reach your weekly target."
             )
+
         else:
+
             st.info(
                 "Start your first workout of the week!"
             )
 
         st.divider()
 
-        # ====================================================
-        # RECENT ACTIVITY
-        # ====================================================
-
         st.subheader(
             "🕒 Recent Activity"
         )
 
-        recent_workouts = get_recent_workouts(
-            workout_history,
-            3,
+        recent_workouts = (
+            get_recent_workouts(
+                workout_history,
+                3,
+            )
         )
 
         if recent_workouts:
@@ -727,24 +1060,26 @@ if st.session_state.page == "Dashboard":
                     "Workout",
                 )
 
-                actual_duration = workout.get(
-                    "actual_duration"
-                )
-
-                total_sets = workout.get(
-                    "total_sets"
-                )
-
-                workout_volume = safe_float(
+                actual_duration = (
                     workout.get(
-                        "total_volume",
-                        0,
+                        "actual_duration"
                     )
                 )
 
-                exercises = workout.get(
-                    "exercises",
-                    [],
+                workout_volume = (
+                    safe_float(
+                        workout.get(
+                            "total_volume",
+                            0,
+                        )
+                    )
+                )
+
+                exercises = (
+                    workout.get(
+                        "exercises",
+                        [],
+                    )
                 )
 
                 completed_exercises = sum(
@@ -765,37 +1100,44 @@ if st.session_state.page == "Dashboard":
                     )
 
                     with col1:
+
                         st.write(
                             f"**{date_value}**"
                         )
+
                         st.write(
                             workout_name
                         )
 
                     with col2:
+
                         st.write(
                             "**Exercises**"
                         )
+
                         st.write(
                             f"{completed_exercises}/"
                             f"{len(exercises)}"
                         )
 
                     with col3:
+
                         st.write(
                             "**Duration**"
                         )
 
                         if actual_duration:
+
                             st.write(
                                 f"{actual_duration} min"
                             )
+
                         else:
-                            st.write(
-                                "—"
-                            )
+
+                            st.write("—")
 
                     with col4:
+
                         st.write(
                             "**Volume**"
                         )
@@ -814,10 +1156,6 @@ if st.session_state.page == "Dashboard":
 
         st.divider()
 
-        # ====================================================
-        # STRENGTH HIGHLIGHTS
-        # ====================================================
-
         st.subheader(
             "🏆 Strength Highlights"
         )
@@ -833,7 +1171,9 @@ if st.session_state.page == "Dashboard":
             columns = st.columns(
                 min(
                     3,
-                    len(strength_highlights),
+                    len(
+                        strength_highlights
+                    ),
                 )
             )
 
@@ -860,10 +1200,6 @@ if st.session_state.page == "Dashboard":
 
         st.divider()
 
-        # ====================================================
-        # QUICK ACTIONS
-        # ====================================================
-
         st.subheader(
             "⚡ Quick Actions"
         )
@@ -873,43 +1209,68 @@ if st.session_state.page == "Dashboard":
         )
 
         with col1:
+
             if st.button(
                 "🏋️ My Workout",
                 use_container_width=True,
             ):
-                st.session_state.page = "My Workout"
+
+                st.session_state.page = (
+                    "My Workout"
+                )
+
                 st.rerun()
 
         with col2:
+
             if st.button(
                 "📝 History",
                 use_container_width=True,
             ):
-                st.session_state.page = "Workout History"
+
+                st.session_state.page = (
+                    "Workout History"
+                )
+
                 st.rerun()
 
         with col3:
+
             if st.button(
                 "📈 Progress",
                 use_container_width=True,
             ):
-                st.session_state.page = "Progress"
+
+                st.session_state.page = (
+                    "Progress"
+                )
+
                 st.rerun()
 
         with col4:
+
             if st.button(
                 "🤖 AI Coach",
                 use_container_width=True,
             ):
-                st.session_state.page = "AI Coach"
+
+                st.session_state.page = (
+                    "AI Coach"
+                )
+
                 st.rerun()
 
         with col5:
+
             if st.button(
                 "👤 Profile",
                 use_container_width=True,
             ):
-                st.session_state.page = "My Profile"
+
+                st.session_state.page = (
+                    "My Profile"
+                )
+
                 st.rerun()
 
 
@@ -921,9 +1282,13 @@ elif st.session_state.page == "My Profile":
 
     st.title("👤 My Profile")
 
-    profile = st.session_state.profile
+    profile = (
+        st.session_state.profile
+    )
 
-    st.subheader("Basic Information")
+    st.subheader(
+        "Basic Information"
+    )
 
     col1, col2 = st.columns(2)
 
@@ -968,7 +1333,8 @@ elif st.session_state.page == "My Profile":
                 gender_options.index(
                     saved_gender
                 )
-                if saved_gender in gender_options
+                if saved_gender
+                in gender_options
                 else 0
             ),
         )
@@ -1001,7 +1367,9 @@ elif st.session_state.page == "My Profile":
 
     st.divider()
 
-    st.subheader("Fitness Information")
+    st.subheader(
+        "Fitness Information"
+    )
 
     fitness_goals = [
         "Build muscle",
@@ -1069,7 +1437,8 @@ elif st.session_state.page == "My Profile":
                 fitness_goals.index(
                     saved_goal
                 )
-                if saved_goal in fitness_goals
+                if saved_goal
+                in fitness_goals
                 else 0
             ),
         )
@@ -1086,7 +1455,8 @@ elif st.session_state.page == "My Profile":
                 fitness_levels.index(
                     saved_level
                 )
-                if saved_level in fitness_levels
+                if saved_level
+                in fitness_levels
                 else 0
             ),
         )
@@ -1103,7 +1473,8 @@ elif st.session_state.page == "My Profile":
                 workout_locations.index(
                     saved_location
                 )
-                if saved_location in workout_locations
+                if saved_location
+                in workout_locations
                 else 0
             ),
         )
@@ -1119,12 +1490,14 @@ elif st.session_state.page == "My Profile":
             saved_equipment,
             list,
         ):
+
             saved_equipment = []
 
         saved_equipment = [
             item
             for item in saved_equipment
-            if item in equipment_options
+            if item
+            in equipment_options
         ]
 
         equipment = st.multiselect(
@@ -1160,7 +1533,9 @@ elif st.session_state.page == "My Profile":
 
     st.divider()
 
-    st.subheader("Workout Preferences")
+    st.subheader(
+        "Workout Preferences"
+    )
 
     target_area_options = [
         "Full Body",
@@ -1185,12 +1560,14 @@ elif st.session_state.page == "My Profile":
         saved_target_areas,
         list,
     ):
+
         saved_target_areas = []
 
     saved_target_areas = [
         area
         for area in saved_target_areas
-        if area in target_area_options
+        if area
+        in target_area_options
     ]
 
     target_areas = st.multiselect(
@@ -1211,7 +1588,8 @@ elif st.session_state.page == "My Profile":
             workout_styles.index(
                 saved_style
             )
-            if saved_style in workout_styles
+            if saved_style
+            in workout_styles
             else 0
         ),
     )
@@ -1228,7 +1606,8 @@ elif st.session_state.page == "My Profile":
             workout_intensities.index(
                 saved_intensity
             )
-            if saved_intensity in workout_intensities
+            if saved_intensity
+            in workout_intensities
             else 1
         ),
     )
@@ -1275,19 +1654,62 @@ elif st.session_state.page == "My Profile":
             "exercises_to_avoid": exercises_to_avoid,
         }
 
-        save_json(
-            PROFILE_FILE,
-            updated_profile,
-        )
+        try:
 
-        st.session_state.profile = updated_profile
-        st.session_state.profile_created = True
+            if is_supabase_available():
 
-        st.success(
-            "Profile saved successfully! ✅"
-        )
+                saved_row = (
+                    save_profile_to_supabase(
+                        updated_profile
+                    )
+                )
 
-        st.rerun()
+                if not saved_row:
+
+                    raise RuntimeError(
+                        "Supabase did not return the saved profile."
+                    )
+
+                st.session_state.profile_id = (
+                    saved_row.get("id")
+                )
+
+                st.session_state.storage_source = (
+                    "supabase"
+                )
+
+            else:
+
+                save_json(
+                    PROFILE_FILE,
+                    updated_profile,
+                )
+
+                st.session_state.storage_source = (
+                    "local"
+                )
+
+            st.session_state.profile = (
+                updated_profile
+            )
+
+            st.session_state.profile_created = (
+                True
+            )
+
+            st.success(
+                "Profile saved successfully! ✅"
+            )
+
+            st.rerun()
+
+        except Exception as error:
+
+            st.error(
+                "Profile could not be saved."
+            )
+
+            st.exception(error)
 
 
 # ============================================================
@@ -1298,8 +1720,13 @@ elif st.session_state.page == "My Workout":
 
     st.title("🏋️ My Workout")
 
-    profile = st.session_state.profile
-    workout_plan = st.session_state.workout_plan
+    profile = (
+        st.session_state.profile
+    )
+
+    workout_plan = (
+        st.session_state.workout_plan
+    )
 
     if not profile:
 
@@ -1318,23 +1745,53 @@ elif st.session_state.page == "My Workout":
             type="primary",
         ):
 
-            new_plan = generate_weekly_plan(
-                profile,
-                exercise_database,
+            new_plan = (
+                generate_weekly_plan(
+                    profile,
+                    exercise_database,
+                )
             )
 
-            st.session_state.workout_plan = new_plan
-
-            save_json(
-                WORKOUT_PLAN_FILE,
-                new_plan,
+            st.session_state.workout_plan = (
+                new_plan
             )
 
-            st.success(
-                "Workout plan generated!"
+            profile_id = (
+                st.session_state.profile_id
             )
 
-            st.rerun()
+            try:
+
+                if (
+                    profile_id
+                    and is_supabase_available()
+                ):
+
+                    save_workout_plan_to_supabase(
+                        profile_id,
+                        new_plan,
+                    )
+
+                else:
+
+                    save_json(
+                        WORKOUT_PLAN_FILE,
+                        new_plan,
+                    )
+
+                st.success(
+                    "Workout plan generated!"
+                )
+
+                st.rerun()
+
+            except Exception as error:
+
+                st.error(
+                    "Workout plan could not be saved."
+                )
+
+                st.exception(error)
 
     else:
 
@@ -1379,21 +1836,26 @@ elif st.session_state.page == "My Workout":
                 expanded=False,
             ):
 
-                col1, col2, col3 = st.columns(3)
+                col1, col2, col3 = (
+                    st.columns(3)
+                )
 
                 with col1:
+
                     st.metric(
                         "Duration",
                         f"{duration} min",
                     )
 
                 with col2:
+
                     st.metric(
                         "Intensity",
                         intensity,
                     )
 
                 with col3:
+
                     st.metric(
                         "Exercises",
                         len(exercises),
@@ -1418,24 +1880,28 @@ elif st.session_state.page == "My Workout":
                     )
 
                     with col1:
+
                         st.write(
                             f"**Sets:** "
                             f"{exercise.get('sets', '-')}"
                         )
 
                     with col2:
+
                         st.write(
                             f"**Reps:** "
                             f"{exercise.get('reps', '-')}"
                         )
 
                     with col3:
+
                         st.write(
                             f"**Rest:** "
                             f"{exercise.get('rest', '-')}"
                         )
 
                     with col4:
+
                         st.write(
                             f"**Equipment:** "
                             f"{exercise.get('equipment', '-')}"
@@ -1451,9 +1917,11 @@ elif st.session_state.page == "My Workout":
                         f"{exercise.get('movement_pattern', '-')}"
                     )
 
-                    instructions = exercise.get(
-                        "instructions",
-                        "",
+                    instructions = (
+                        exercise.get(
+                            "instructions",
+                            "",
+                        )
                     )
 
                     if instructions:
@@ -1461,6 +1929,7 @@ elif st.session_state.page == "My Workout":
                         with st.expander(
                             "How to perform"
                         ):
+
                             st.write(
                                 instructions
                             )
@@ -1476,24 +1945,54 @@ elif st.session_state.page == "My Workout":
             "Generate New Weekly Plan 🔥"
         ):
 
-            new_plan = generate_weekly_plan(
-                profile,
-                exercise_database,
+            new_plan = (
+                generate_weekly_plan(
+                    profile,
+                    exercise_database,
+                )
             )
 
-            st.session_state.workout_plan = new_plan
-
-            save_json(
-                WORKOUT_PLAN_FILE,
-                new_plan,
+            st.session_state.workout_plan = (
+                new_plan
             )
 
-            st.success(
-                "A new personalized weekly plan "
-                "has been generated!"
+            profile_id = (
+                st.session_state.profile_id
             )
 
-            st.rerun()
+            try:
+
+                if (
+                    profile_id
+                    and is_supabase_available()
+                ):
+
+                    save_workout_plan_to_supabase(
+                        profile_id,
+                        new_plan,
+                    )
+
+                else:
+
+                    save_json(
+                        WORKOUT_PLAN_FILE,
+                        new_plan,
+                    )
+
+                st.success(
+                    "A new personalized weekly plan "
+                    "has been generated!"
+                )
+
+                st.rerun()
+
+            except Exception as error:
+
+                st.error(
+                    "Workout plan could not be saved."
+                )
+
+                st.exception(error)
 
         st.divider()
 
@@ -1506,11 +2005,34 @@ elif st.session_state.page == "My Workout":
             "from your actual workout."
         )
 
-        render_workout_logger(
-            workout_plan=st.session_state.workout_plan,
-            workout_history=st.session_state.workout_history,
-            history_file=WORKOUT_HISTORY_FILE,
-            save_json_function=save_json,
+        # ----------------------------------------------------
+        # WORKOUT LOGGER
+        # ----------------------------------------------------
+
+        st.session_state.workout_history = (
+            render_workout_logger(
+                workout_plan=(
+                    st.session_state.workout_plan
+                ),
+                workout_history=(
+                    st.session_state.workout_history
+                ),
+                history_file=(
+                    WORKOUT_HISTORY_FILE
+                ),
+                save_json_function=save_json,
+                save_supabase_function=(
+                    save_workout_history_to_supabase
+                ),
+                profile_id=(
+                    st.session_state.profile_id
+                ),
+                use_supabase=(
+                    st.session_state.storage_source
+                    == "supabase"
+                ),
+            )
+            or st.session_state.workout_history
         )
 
 
@@ -1522,7 +2044,9 @@ elif st.session_state.page == "Workout History":
 
     st.title("📚 Workout History")
 
-    history = st.session_state.workout_history
+    history = (
+        st.session_state.workout_history
+    )
 
     if not history:
 
@@ -1539,15 +2063,19 @@ elif st.session_state.page == "Workout History":
             )
         )
 
-        col1, col2 = st.columns(2)
+        col1, col2 = (
+            st.columns(2)
+        )
 
         with col1:
+
             st.metric(
                 "Completed Workouts",
                 len(history),
             )
 
         with col2:
+
             st.metric(
                 "Completed Exercises",
                 completed_exercises,
@@ -1555,7 +2083,9 @@ elif st.session_state.page == "Workout History":
 
         st.divider()
 
-        for workout in reversed(history):
+        for workout in reversed(
+            history
+        ):
 
             date = workout.get(
                 "date",
@@ -1593,15 +2123,19 @@ elif st.session_state.page == "Workout History":
             ):
 
                 if time:
+
                     st.write(
                         f"**Time:** {time}"
                     )
 
-                actual_duration = workout.get(
-                    "actual_duration"
+                actual_duration = (
+                    workout.get(
+                        "actual_duration"
+                    )
                 )
 
                 if actual_duration:
+
                     st.write(
                         f"**Duration:** "
                         f"{actual_duration} minutes"
@@ -1612,6 +2146,7 @@ elif st.session_state.page == "Workout History":
                 )
 
                 if total_sets is not None:
+
                     st.write(
                         f"**Completed Sets:** "
                         f"{total_sets}"
@@ -1622,6 +2157,7 @@ elif st.session_state.page == "Workout History":
                 )
 
                 if total_volume is not None:
+
                     st.write(
                         f"**Total Volume:** "
                         f"{float(total_volume):,.1f} kg"
@@ -1654,9 +2190,11 @@ elif st.session_state.page == "Workout History":
 
                         for set_data in sets:
 
-                            set_number = set_data.get(
-                                "set_number",
-                                "-",
+                            set_number = (
+                                set_data.get(
+                                    "set_number",
+                                    "-",
+                                )
                             )
 
                             set_completed = (
@@ -1668,19 +2206,25 @@ elif st.session_state.page == "Workout History":
                                 else "❌"
                             )
 
-                            weight = set_data.get(
-                                "weight_kg",
-                                0,
+                            weight = (
+                                set_data.get(
+                                    "weight_kg",
+                                    0,
+                                )
                             )
 
-                            reps = set_data.get(
-                                "actual_reps",
-                                0,
+                            reps = (
+                                set_data.get(
+                                    "actual_reps",
+                                    0,
+                                )
                             )
 
-                            volume = set_data.get(
-                                "volume",
-                                0,
+                            volume = (
+                                set_data.get(
+                                    "volume",
+                                    0,
+                                )
                             )
 
                             st.write(
@@ -1698,6 +2242,7 @@ elif st.session_state.page == "Workout History":
                         )
 
                         with col1:
+
                             st.write(
                                 f"Planned: "
                                 f"{exercise.get('planned_sets', '-')}"
@@ -1706,12 +2251,14 @@ elif st.session_state.page == "Workout History":
                             )
 
                         with col2:
+
                             st.write(
                                 f"Actual reps: "
                                 f"{exercise.get('actual_reps', '-')}"
                             )
 
                         with col3:
+
                             st.write(
                                 f"Weight: "
                                 f"{exercise.get('weight_kg', 0)} kg"
@@ -1739,7 +2286,9 @@ elif st.session_state.page == "Progress":
 
     st.title("📈 Progress")
 
-    history = st.session_state.workout_history
+    history = (
+        st.session_state.workout_history
+    )
 
     if not history:
 
@@ -1756,7 +2305,9 @@ elif st.session_state.page == "Progress":
 
     else:
 
-        total_workouts = len(history)
+        total_workouts = len(
+            history
+        )
 
         workouts_this_week = (
             get_workouts_this_week(
@@ -1786,27 +2337,33 @@ elif st.session_state.page == "Progress":
             "📊 Training Overview"
         )
 
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4 = (
+            st.columns(4)
+        )
 
         with col1:
+
             st.metric(
                 "Total Workouts",
                 total_workouts,
             )
 
         with col2:
+
             st.metric(
                 "This Week",
                 workouts_this_week,
             )
 
         with col3:
+
             st.metric(
                 "This Month",
                 workouts_this_month,
             )
 
         with col4:
+
             st.metric(
                 "Exercises Completed",
                 total_exercises,
@@ -1842,7 +2399,9 @@ elif st.session_state.page == "Progress":
             "🏋️ Training Volume"
         )
 
-        col1, col2 = st.columns(2)
+        col1, col2 = (
+            st.columns(2)
+        )
 
         with col1:
 
@@ -1930,14 +2489,18 @@ elif st.session_state.page == "Progress":
                 performance.keys()
             )
 
-            selected_exercise = st.selectbox(
-                "Select an exercise",
-                exercise_names,
+            selected_exercise = (
+                st.selectbox(
+                    "Select an exercise",
+                    exercise_names,
+                )
             )
 
-            exercise_history = performance[
-                selected_exercise
-            ]
+            exercise_history = (
+                performance[
+                    selected_exercise
+                ]
+            )
 
             exercise_history = sorted(
                 exercise_history,
@@ -2098,9 +2661,17 @@ elif st.session_state.page == "AI Coach":
 
     st.title("🤖 AI Workout Coach")
 
-    profile = st.session_state.profile
-    workout_plan = st.session_state.workout_plan
-    workout_history = st.session_state.workout_history
+    profile = (
+        st.session_state.profile
+    )
+
+    workout_plan = (
+        st.session_state.workout_plan
+    )
+
+    workout_history = (
+        st.session_state.workout_history
+    )
 
     if not profile:
 
@@ -2171,4 +2742,3 @@ elif st.session_state.page == "AI Coach":
                         st.caption(
                             f"Error: {error}"
                         )
-
