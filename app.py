@@ -1,3 +1,4 @@
+import modules.auth as auth
 from utils.storage import reset_user_progress_soft
 from utils.storage import reset_user_progress_soft
 
@@ -51,9 +52,14 @@ from utils.storage import (
 
 st.set_page_config(
     page_title="Personal Workout Trainer",
-    page_icon="🏋️",
+    page_icon="🏋️‍♂️",
     layout="wide",
 )
+
+# Secure User Multi-Tenant Gatekeeper
+if "user" not in st.session_state:
+    auth.render_login_interface()
+    st.stop()
 
 
 # ============================================================
@@ -699,6 +705,11 @@ else:
 # DANGER ZONE: DATA CLEANUP CONTROLLER
 # ============================================================
 st.sidebar.markdown("---")
+# Isolated User Session Eraser Loop
+if st.sidebar.button("🚪 Log Out of Session", use_container_width=True):
+    st.session_state.clear()
+    st.success("Session disconnected successfully! Clearing active arrays...")
+    st.rerun()
 with st.sidebar.expander("Danger Zone 🚨", expanded=False):
     st.write("Wipe existing test logs to clear room for your true tracking data.")
     if st.button("Reset Progress & Start Fresh", type="primary", use_container_width=True):
