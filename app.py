@@ -853,7 +853,9 @@ if st.session_state.page == "Dashboard":
             workout_history,
         )
 
-        if next_workout:
+        
+        if 'next_workout' not in locals() or next_workout is None: next_workout = {'day': 'Active Session', 'exercises': []}
+        if True:
 
             workout_name = (
                 next_workout.get(
