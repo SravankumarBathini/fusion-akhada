@@ -453,6 +453,21 @@ def render_workout_logger(
     use_supabase=False,
 ):
 
+    # ============================================================
+    # CLOUD SAFETY VALVE: MANUAL EXERCISE LOGGER OVERRIDE
+    # ============================================================
+    if not workout_plan:
+        import streamlit as st
+        from utils.storage import load_json
+        st.info("?? No active plan synced yet. You can still log any exercise manually right now!")
+        exercises_list = load_json("data/exercises.json", [])
+        if exercises_list:
+            ex_names = sorted(list({e.get("name") for e in exercises_list if e.get("name")}))
+            chosen_ex = st.selectbox("Choose Exercise to Log:", ex_names)
+            if chosen_ex:
+                workout_plan = [{"day": "Manual Session", "exercises": [{"name": chosen_ex, "sets": [{"weight_kg": 0.0, "actual_reps": 0, "completed": False} for _ in range(3)]}]}]
+
+
     _ensure_session_state()
 
     if not workout_plan:
