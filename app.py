@@ -1,3 +1,4 @@
+from utils.storage import reset_user_progress_soft
 
 import json
 from datetime import datetime, timedelta
@@ -687,7 +688,7 @@ st.sidebar.markdown("---")
 with st.sidebar.expander("Danger Zone 🚨", expanded=False):
     st.write("Wipe existing test logs to clear room for your true tracking data.")
     if st.button("Reset Progress & Start Fresh", type="primary", use_container_width=True):
-        from utils.storage import reset_user_progress_soft
+        pass
         
         with st.spinner("Purging test data..."):
             if reset_user_progress_soft():
