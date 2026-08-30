@@ -59,6 +59,30 @@ st.set_page_config(
 # Secure User Multi-Tenant Gatekeeper
 if "user" not in st.session_state:
     auth.render_login_interface()
+
+# Dynamic Premium Equipment Background Engine
+def inject_premium_dashboard_background():
+    # Utilizing high-contrast minimalist equipment texture backdrop with linear opacity mask
+    bg_css = """
+    <style>
+    [data-testid="stAppViewContainer"] {
+        background: linear-gradient(rgba(253, 251, 247, 0.94), rgba(253, 251, 247, 0.94)), 
+                    url("https://unsplash.com");
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+    }
+    /* Increase opacity for inner secondary data cards to keep telemetry sharp */
+    [data-testid="stMetricBlock"], [data-testid="stForm"] {
+        background-color: rgba(243, 244, 246, 0.97) !important;
+        border: 1px solid rgba(185, 28, 28, 0.15) !important;
+    }
+    </style>
+    """
+    st.markdown(bg_css, unsafe_allow_html=True)
+
+# Trigger global canvas styling
+inject_premium_dashboard_background()
     st.stop()
 
 
