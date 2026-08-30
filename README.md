@@ -4,7 +4,7 @@
 
 A robust, data-driven full-stack fitness management dashboard engineered to automate workout structuring, monitor muscle group training distribution, and keep secure multi-user states isolated. 
 
-?? **Live Application:** [personal-workout-trainer.streamlit.app](https://streamlit.app)
+**Live Application:** https://personal-workout-trainer.streamlit.app/
 
 ---
 
