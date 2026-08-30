@@ -804,7 +804,7 @@ def render_workout_logger(
                 with col2:
 
                     weight = st.number_input(
-                        "Weight (kg)",
+                        f"Weight (kg) ?? {target_weight:.1f}kg" if target_weight > 0.0 else f"Weight (kg) ?? {target_weight:.1f}kg" if target_weight > 0.0 else "Weight (kg)",
                         min_value=0.0,
                         max_value=500.0,
                         value=float(
@@ -824,7 +824,7 @@ def render_workout_logger(
                 with col3:
 
                     reps = st.number_input(
-                        "Reps",
+                        f"Reps ?? {target_reps}" if target_weight > 0.0 else f"Reps ?? {target_reps}" if target_weight > 0.0 else "Reps",
                         min_value=0,
                         max_value=200,
                         value=int(
