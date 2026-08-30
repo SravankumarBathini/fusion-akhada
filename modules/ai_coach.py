@@ -1,4 +1,3 @@
-
 import os
 from typing import Any
 
@@ -478,3 +477,37 @@ would help.
 
     return answer.strip()
 
+import streamlit as st
+from google import genai
+import os
+
+def run_adaptive_rules_engine(metrics: dict) -> dict:
+    rpe, soreness, energy = metrics.get("rpe", 7), metrics.get("soreness", 2), metrics.get("energy", 3)
+    status, set_mod, rep_mod = "Normal", 0, 0
+    if rpe >= 9 or soreness >= 4:
+        status, set_mod, rep_mod = "Deload Adaptive Cycle", -1, -2
+    elif energy >= 4 and soreness <= 2:
+        status, rep_mod = "Progressive Overload Cycle", 2
+    return {"cycle_status": status, "set_mod": set_mod, "rep_mod": rep_mod}
+
+@st.cache_data(ttl="1h", show_spinner=False)
+def generate_coach_descriptive_feedback(metrics: dict, adjustment: dict, current_split: str) -> str:
+    key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
+    if not key: return "?? Gemini API key configuration missing."
+    try:
+        client = genai.Client(api_key=key)
+        prompt = f"As elite athletic coach analyze: Split={current_split}. RPE={metrics.get("rpe")}, Soreness={metrics.get("soreness")}, Energy={metrics.get("energy")}. Cycle={adjustment["cycle_status"]}. Output 3 actionable bullet cues."
+        return client.models.generate_content(model="gemini-3.6-flash", contents=prompt).text
+    except Exception as e: return f"AI Engine Error: {str(e)}"
+
+def render_ai_coach_dashboard_ui(metrics: dict, current_split: str):
+    st.subheader("Adaptive AI Coach Engine")
+    adj = run_adaptive_rules_engine(metrics)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Target Cycle Execution", adj["cycle_status"])
+    c2.metric("Set Adjustments", f"{adj["set_mod"]} Sets")
+    c3.metric("Rep Adjustments", f"{adj["rep_mod"]} Reps")
+    st.write("---")
+    st.markdown("**Coach program directives:**")
+    with st.spinner("Processing bio-telemetry..."):
+        st.info(generate_coach_descriptive_feedback(metrics, adj, current_split))

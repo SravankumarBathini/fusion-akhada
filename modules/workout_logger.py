@@ -1,4 +1,5 @@
 import json
+import modules.ai_coach as ai_coach
 from datetime import datetime
 from pathlib import Path
 
@@ -946,6 +947,26 @@ def render_workout_logger(
     # ACTION BUTTONS
     # ========================================================
 
+    # ============================================================
+    # PORTFOLIO METRICS LOOP: POST-WORKOUT READINESS CHECK
+    # ============================================================
+    st.write("---")
+    
+    with st.form(key="fatigue_readiness_v2_form"):
+        st.markdown("### Post-Workout Fatigue and Readiness Check")
+        st.caption("Rate metrics to train your closed-loop AI model layer.")
+        rpe = st.slider("Session Exertion (RPE 1-10):", min_value=1, max_value=10, value=7, step=1)
+        soreness = st.slider("Muscle/Joint Soreness (1-5):", min_value=1, max_value=5, value=2, step=1)
+        energy = st.slider("Remaining Energy Reserves (1-5):", min_value=1, max_value=5, value=3, step=1)
+        submit = st.form_submit_button(label="? Analyze Performance and Load Coach Advice")
+    if submit:
+        import modules.ai_coach as ai_coach
+        ai_coach.render_ai_coach_dashboard_ui({"rpe":rpe,"soreness":soreness,"energy":energy}, st.session_state.get("current_workout_name", "Akhada Session"))
+        st.slider("Session Exertion (RPE 1-10):", min_value=1, max_value=10, value=7, step=1, key="feedback_rpe")
+    
+    
+    st.write("")
+
     col1, col2 = st.columns(2)
 
     with col1:
@@ -1008,6 +1029,9 @@ def render_workout_logger(
                     pass
 
             completed_workout = {
+                "rpe": int(st.session_state.get("feedback_rpe", 7)),
+                "soreness": int(st.session_state.get("feedback_soreness", 2)),
+                "energy": int(st.session_state.get("feedback_energy", 3)),
                 "date": completed_at.strftime(
                     "%Y-%m-%d"
                 ),
