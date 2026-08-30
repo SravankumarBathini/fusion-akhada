@@ -586,6 +586,9 @@ def save_workout_history_to_supabase(
         ),
 
         "workout_data": workout,
+        "rpe": int(workout.get("rpe", 7)),
+        "soreness": int(workout.get("soreness", 2)),
+        "energy": int(workout.get("energy", 3)),
     }
 
     try:
