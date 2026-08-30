@@ -1,4 +1,4 @@
-import modules.auth as auth
+﻿import modules.auth as auth
 from utils.storage import reset_user_progress_soft
 from utils.storage import reset_user_progress_soft
 
@@ -52,21 +52,15 @@ from utils.storage import (
 
 st.set_page_config(
     page_title="Personal Workout Trainer",
-    page_icon="??????",
+    page_icon="🏋️‍♂️",
     layout="wide",
 )
 
 # Secure User Multi-Tenant Gatekeeper
 if "user" not in st.session_state:
-    import modules.auth as auth
     auth.render_login_interface()
     st.markdown("<style>[data-testid='stSidebarNav'] {display: none;} div.block-container {padding-top: 2rem;}</style>", unsafe_allow_html=True)
     st.stop()
-
-
-# Secure User Multi-Tenant Gatekeeper
-if "user" not in st.session_state:
-    auth.render_login_interface()
 
 # Dynamic Premium Equipment Background Engine
 def inject_premium_dashboard_background():

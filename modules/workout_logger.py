@@ -958,7 +958,7 @@ def render_workout_logger(
         rpe = st.slider("Session Exertion (RPE 1-10):", min_value=1, max_value=10, value=7, step=1)
         soreness = st.slider("Muscle/Joint Soreness (1-5):", min_value=1, max_value=5, value=2, step=1)
         energy = st.slider("Remaining Energy Reserves (1-5):", min_value=1, max_value=5, value=3, step=1)
-        submit = st.form_submit_button(label="? Analyze Performance and Load Coach Advice")
+        submit = st.form_submit_button(label="Analyze Performance and Load Coach Advice")
     if submit:
         import modules.ai_coach as ai_coach
         ai_coach.render_ai_coach_dashboard_ui({"rpe":rpe,"soreness":soreness,"energy":energy}, st.session_state.get("current_workout_name", "Akhada Session"))
