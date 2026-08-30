@@ -83,7 +83,6 @@ def inject_premium_dashboard_background():
 
 # Trigger global canvas styling
 inject_premium_dashboard_background()
-    st.stop()
 
 
 # ============================================================
