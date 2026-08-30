@@ -114,13 +114,26 @@ def load_persistent_data():
     """
 
     # --------------------------------------------------------
-    # LOCAL REFERENCE DATA
+    # CLOUD-FIRST REFERENCE DATA CATALOG
     # --------------------------------------------------------
-
-    exercise_database = load_json(
-        EXERCISES_FILE,
-        [],
-    )
+    exercise_database = []
+    if is_supabase_available():
+        try:
+            from utils.storage import _get_supabase_client
+            client = _get_supabase_client()
+            if client is not None:
+                response = client.table("exercises").select("*").execute()
+                if response.data:
+                    exercise_database = response.data
+        except Exception:
+            pass
+            
+    # Fallback to local file if cloud repository is empty or unreachable
+    if not exercise_database:
+        exercise_database = load_json(
+            EXERCISES_FILE,
+            [],
+        )
 
     # --------------------------------------------------------
     # SUPABASE
