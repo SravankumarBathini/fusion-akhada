@@ -129,11 +129,9 @@ def _calculate_workout_totals(session):
                     )
                 )
 
-                total_volume += (
-                    _calculate_set_volume(
-                        weight,
-                        reps,
-                    )
+                total_volume += _calculate_set_volume(
+                    weight,
+                    reps,
                 )
 
                 exercise_completed = True
@@ -180,7 +178,7 @@ def _save_history(
     history,
     save_json_function,
 ):
-    save_json_function(
+    return save_json_function(
         history_file,
         history,
     )
@@ -200,7 +198,7 @@ def _get_previous_performance(
     """
 
     for workout in reversed(
-        workout_history
+        workout_history or []
     ):
 
         for exercise in workout.get(
@@ -232,9 +230,7 @@ def _get_previous_performance(
 
                 if completed_sets:
 
-                    last_set = (
-                        completed_sets[-1]
-                    )
+                    last_set = completed_sets[-1]
 
                     return {
                         "weight_kg": last_set.get(
@@ -332,27 +328,21 @@ def _ensure_session_state():
         not in st.session_state
     ):
 
-        st.session_state.active_workout_session = (
-            None
-        )
+        st.session_state.active_workout_session = None
 
     if (
         "workout_session_started"
         not in st.session_state
     ):
 
-        st.session_state.workout_session_started = (
-            False
-        )
+        st.session_state.workout_session_started = False
 
     if (
         "selected_workout_day"
         not in st.session_state
     ):
 
-        st.session_state.selected_workout_day = (
-            0
-        )
+        st.session_state.selected_workout_day = 0
 
 
 # ============================================================
@@ -370,13 +360,22 @@ def _save_completed_workout(
     """
     Save completed workout.
 
-    Supabase is the primary storage when enabled.
-    Local JSON is used as fallback.
+    Supabase is the primary persistent storage when enabled.
+
+    Local JSON is used only when:
+    - Supabase is disabled
+    - Supabase configuration is unavailable
+    - Supabase save fails
+    - Supabase does not return a successfully inserted row
+
+    Returns:
+        "supabase" when Supabase save succeeds.
+        "local" when local JSON fallback is used.
     """
 
-    # --------------------------------------------------------
+    # ========================================================
     # SUPABASE PRIMARY STORAGE
-    # --------------------------------------------------------
+    # ========================================================
 
     if (
         use_supabase
@@ -386,34 +385,37 @@ def _save_completed_workout(
 
         try:
 
-            saved_result = (
-                save_supabase_function(
-                    profile_id,
-                    completed_workout,
-                )
+            saved_result = save_supabase_function(
+                profile_id,
+                completed_workout,
             )
 
-            if saved_result is not False:
+            # A successful Supabase save must return
+            # the inserted row as a dictionary.
+            if isinstance(
+                saved_result,
+                dict,
+            ):
                 return "supabase"
 
             raise RuntimeError(
-                "Supabase did not confirm the workout save."
+                "Supabase workout save returned no inserted row."
             )
 
         except Exception as error:
 
             st.warning(
                 "Workout could not be saved to Supabase. "
-                "Saving a local backup instead."
+                "A local backup will be used instead."
             )
 
             st.caption(
                 f"Supabase save error: {error}"
             )
 
-    # --------------------------------------------------------
-    # LOCAL FALLBACK
-    # --------------------------------------------------------
+    # ========================================================
+    # LOCAL JSON FALLBACK
+    # ========================================================
 
     history = _load_history(
         history_file
@@ -423,11 +425,16 @@ def _save_completed_workout(
         completed_workout
     )
 
-    _save_history(
+    local_saved = _save_history(
         history_file,
         history,
         save_json_function,
     )
+
+    if not local_saved:
+        st.error(
+            "The workout could not be saved locally either."
+        )
 
     return "local"
 
@@ -489,8 +496,7 @@ def render_workout_logger(
         selected_day = st.selectbox(
             "Choose workout",
             range(len(day_names)),
-            format_func=lambda index:
-                day_names[index],
+            format_func=lambda index: day_names[index],
             key="workout_day_selector",
         )
 
@@ -587,9 +593,7 @@ def render_workout_logger(
 
     if not session:
 
-        st.session_state.workout_session_started = (
-            False
-        )
+        st.session_state.workout_session_started = False
 
         st.rerun()
 
@@ -691,10 +695,35 @@ def render_workout_logger(
             8,
         )
 
+
         previous = _get_previous_performance(
             workout_history,
             exercise_name,
         )
+
+        # ============================================================
+        # DOUBLE PROGRESSION ENGINE (ADAPTIVE REPS & WEIGHT)
+        # ============================================================
+        prev_weight = float(previous.get('weight_kg', 0.0)) if previous else 0.0
+        prev_reps = int(previous.get('actual_reps', 0)) if previous else 0
+        
+        # Default starting baselines
+        target_weight = prev_weight if prev_weight > 0.0 else 0.0
+        
+        if prev_weight > 0.0:
+            # If you hit or exceed your planned reps last time, push the volume ceiling
+            if prev_reps >= planned_reps:
+                # Cap rep scaling at an upper hypertrophy limit (e.g., 15 reps)
+                if prev_reps < 15:
+                    target_reps = prev_reps + 1
+                else:
+                    # If you hit 15 reps, trigger a note to buy/increase weights
+                    target_reps = planned_reps 
+            else:
+                target_reps = max(prev_reps, planned_reps)
+        else:
+            target_reps = planned_reps
+
 
         completed_sets = sum(
             1
@@ -762,10 +791,8 @@ def render_workout_logger(
 
                 set_number = set_index + 1
 
-                col1, col2, col3, col4 = (
-                    st.columns(
-                        [0.8, 1.4, 1.4, 1]
-                    )
+                col1, col2, col3, col4 = st.columns(
+                    [0.8, 1.4, 1.4, 1]
                 )
 
                 with col1:
@@ -846,14 +873,24 @@ def render_workout_logger(
             # EXERCISE COMPLETE
             # ------------------------------------------------
 
+            completed_sets = sum(
+                1
+                for set_data in exercise.get(
+                    "sets",
+                    [],
+                )
+                if set_data.get(
+                    "completed",
+                    False,
+                )
+            )
+
             all_completed = (
                 completed_sets >= planned_sets
                 and planned_sets > 0
             )
 
-            exercise["completed"] = (
-                all_completed
-            )
+            exercise["completed"] = all_completed
 
             if all_completed:
 
@@ -971,6 +1008,15 @@ def render_workout_logger(
                 "total_sets": total_sets,
                 "total_volume": total_volume,
                 "completed_exercises": completed_exercises,
+                "total_exercises": len(
+                    session.get(
+                        "exercises",
+                        [],
+                    )
+                ),
+                "intensity": selected_workout.get(
+                    "intensity"
+                ),
                 "notes": session.get(
                     "notes",
                     "",
@@ -1010,15 +1056,11 @@ def render_workout_logger(
                 updated_history
             )
 
-            # Clear active session
+            # Clear active session.
 
-            st.session_state.active_workout_session = (
-                None
-            )
+            st.session_state.active_workout_session = None
 
-            st.session_state.workout_session_started = (
-                False
-            )
+            st.session_state.workout_session_started = False
 
             # ------------------------------------------------
             # SUCCESS MESSAGE
@@ -1046,9 +1088,7 @@ def render_workout_logger(
                 "📊 Workout Summary"
             )
 
-            col1, col2, col3, col4 = (
-                st.columns(4)
-            )
+            col1, col2, col3, col4 = st.columns(4)
 
             with col1:
 
@@ -1111,13 +1151,9 @@ def render_workout_logger(
         type="secondary",
     ):
 
-        st.session_state.active_workout_session = (
-            None
-        )
+        st.session_state.active_workout_session = None
 
-        st.session_state.workout_session_started = (
-            False
-        )
+        st.session_state.workout_session_started = False
 
         st.warning(
             "Active workout cancelled. "
