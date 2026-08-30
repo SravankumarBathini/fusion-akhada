@@ -678,6 +678,30 @@ else:
     )
 
 
+
+
+# ============================================================
+# DANGER ZONE: DATA CLEANUP CONTROLLER
+# ============================================================
+st.sidebar.markdown("---")
+with st.sidebar.expander("Danger Zone 🚨", expanded=False):
+    st.write("Wipe existing test logs to clear room for your true tracking data.")
+    if st.button("Reset Progress & Start Fresh", type="primary", use_container_width=True):
+        from utils.storage import reset_user_progress_soft
+        
+        with st.spinner("Purging test data..."):
+            if reset_user_progress_soft():
+                # Instantly strip volatile states in active session memory
+                st.session_state.workout_plan = []
+                st.session_state.workout_history = []
+                st.session_state.cloud_data_loaded = False
+                st.session_state.page = "Dashboard"
+                
+                st.toast("Testing profiles cleared successfully!")
+                st.rerun()
+            else:
+                st.error("Failed to cleanly flush structural tables.")
+
 # ============================================================
 # DASHBOARD
 # ============================================================

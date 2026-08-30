@@ -33,6 +33,7 @@ def _load_dotenv_file() -> dict[str, str]:
         return values
 
     try:
+
         with ENV_FILE.open(
             "r",
             encoding="utf-8",
@@ -42,24 +43,26 @@ def _load_dotenv_file() -> dict[str, str]:
 
                 line = raw_line.strip()
 
-                # Ignore empty lines and comments.
                 if not line or line.startswith("#"):
                     continue
 
                 if "=" not in line:
                     continue
 
-                key, value = line.split("=", 1)
+                key, value = line.split(
+                    "=",
+                    1,
+                )
 
                 key = key.strip()
                 value = value.strip()
 
-                # Remove matching surrounding quotes.
                 if (
                     len(value) >= 2
                     and value[0] == value[-1]
                     and value[0] in {"'", '"'}
                 ):
+
                     value = value[1:-1]
 
                 values[key] = value
@@ -74,7 +77,9 @@ def _load_dotenv_file() -> dict[str, str]:
 # CONFIGURATION VALUE
 # ============================================================
 
-def _get_secret(name: str) -> str | None:
+def _get_secret(
+    name: str,
+) -> str | None:
     """
     Read a configuration value in this order:
 
@@ -131,16 +136,26 @@ def _get_supabase_client() -> Client | None:
     Returns None when Supabase configuration is unavailable.
     """
 
-    supabase_url = _get_secret("SUPABASE_URL")
-    supabase_key = _get_secret("SUPABASE_KEY")
+    supabase_url = _get_secret(
+        "SUPABASE_URL"
+    )
+
+    supabase_key = _get_secret(
+        "SUPABASE_KEY"
+    )
 
     if not supabase_url or not supabase_key:
         return None
 
-    return create_client(
-        supabase_url,
-        supabase_key,
-    )
+    try:
+
+        return create_client(
+            supabase_url,
+            supabase_key,
+        )
+
+    except Exception:
+        return None
 
 
 # ============================================================
@@ -149,7 +164,8 @@ def _get_supabase_client() -> Client | None:
 
 def is_supabase_available() -> bool:
     """
-    Return True when Supabase credentials are configured.
+    Return True when Supabase credentials are configured
+    and a client can be created.
     """
 
     return _get_supabase_client() is not None
@@ -246,6 +262,10 @@ def save_profile_to_supabase(
 
     The complete original profile dictionary is preserved
     inside profile_data JSONB.
+
+    Returns the inserted row on success.
+    Returns None when Supabase is unavailable or the insert
+    does not return a row.
     """
 
     client = _get_supabase_client()
@@ -265,7 +285,10 @@ def save_profile_to_supabase(
         "equipment": profile.get("equipment"),
         "days_per_week": profile.get("days_per_week"),
         "workout_duration_minutes": profile.get(
-            "workout_duration_minutes"
+            "workout_duration_minutes",
+            profile.get(
+                "workout_duration"
+            ),
         ),
         "target_areas": profile.get("target_areas"),
         "workout_style": profile.get("workout_style"),
@@ -275,14 +298,28 @@ def save_profile_to_supabase(
         "profile_data": profile,
     }
 
-    response = (
-        client
-        .table("profiles")
-        .insert(row)
-        .execute()
-    )
+    try:
 
-    if response.data:
+        response = (
+            client
+            .table("profiles")
+            .insert(row)
+            .execute()
+        )
+
+    except Exception:
+
+        return None
+
+    if (
+        response
+        and response.data
+        and isinstance(
+            response.data[0],
+            dict,
+        )
+    ):
+
         return response.data[0]
 
     return None
@@ -298,26 +335,38 @@ def load_latest_profile_from_supabase() -> dict[str, Any] | None:
     if client is None:
         return None
 
-    response = (
-        client
-        .table("profiles")
-        .select("*")
-        .order(
-            "created_at",
-            desc=True,
+    try:
+
+        response = (
+            client
+            .table("profiles")
+            .select("*")
+            .order(
+                "created_at",
+                desc=True,
+            )
+            .limit(1)
+            .execute()
         )
-        .limit(1)
-        .execute()
-    )
+
+    except Exception:
+
+        return None
 
     if not response.data:
         return None
 
     row = response.data[0]
 
-    profile_data = row.get("profile_data")
+    profile_data = row.get(
+        "profile_data"
+    )
 
-    if isinstance(profile_data, dict):
+    if isinstance(
+        profile_data,
+        dict,
+    ):
+
         return profile_data
 
     return {
@@ -344,6 +393,9 @@ def save_workout_plan_to_supabase(
     Save a generated workout plan to Supabase.
 
     The complete workout plan is preserved in plan_data JSONB.
+
+    Returns the inserted row on success.
+    Returns None when the save fails.
     """
 
     client = _get_supabase_client()
@@ -351,9 +403,11 @@ def save_workout_plan_to_supabase(
     if client is None:
         return None
 
-    # A generated weekly plan is normally a list.
-    # Preserve the complete object exactly as supplied.
-    if isinstance(workout_plan, dict):
+    if isinstance(
+        workout_plan,
+        dict,
+    ):
+
         plan_name = workout_plan.get(
             "name",
             "Weekly Workout Plan",
@@ -364,8 +418,11 @@ def save_workout_plan_to_supabase(
         )
 
     else:
+
         plan_name = "Weekly Workout Plan"
-        days_per_week = len(workout_plan)
+        days_per_week = len(
+            workout_plan
+        )
 
     row = {
         "profile_id": profile_id,
@@ -374,14 +431,28 @@ def save_workout_plan_to_supabase(
         "plan_data": workout_plan,
     }
 
-    response = (
-        client
-        .table("workout_plans")
-        .insert(row)
-        .execute()
-    )
+    try:
 
-    if response.data:
+        response = (
+            client
+            .table("workout_plans")
+            .insert(row)
+            .execute()
+        )
+
+    except Exception:
+
+        return None
+
+    if (
+        response
+        and response.data
+        and isinstance(
+            response.data[0],
+            dict,
+        )
+    ):
+
         return response.data[0]
 
     return None
@@ -399,30 +470,42 @@ def load_latest_workout_plan_from_supabase(
     if client is None:
         return None
 
-    response = (
-        client
-        .table("workout_plans")
-        .select("*")
-        .eq(
-            "profile_id",
-            profile_id,
+    try:
+
+        response = (
+            client
+            .table("workout_plans")
+            .select("*")
+            .eq(
+                "profile_id",
+                profile_id,
+            )
+            .order(
+                "created_at",
+                desc=True,
+            )
+            .limit(1)
+            .execute()
         )
-        .order(
-            "created_at",
-            desc=True,
-        )
-        .limit(1)
-        .execute()
-    )
+
+    except Exception:
+
+        return None
 
     if not response.data:
         return None
 
     row = response.data[0]
 
-    plan_data = row.get("plan_data")
+    plan_data = row.get(
+        "plan_data"
+    )
 
-    if isinstance(plan_data, (dict, list)):
+    if isinstance(
+        plan_data,
+        (dict, list),
+    ):
+
         return plan_data
 
     return None
@@ -441,6 +524,10 @@ def save_workout_history_to_supabase(
 
     The complete original workout object is preserved
     inside workout_data JSONB.
+
+    Returns:
+        The inserted Supabase row on success.
+        None when Supabase is unavailable or the insert fails.
     """
 
     client = _get_supabase_client()
@@ -501,14 +588,31 @@ def save_workout_history_to_supabase(
         "workout_data": workout,
     }
 
-    response = (
-        client
-        .table("workout_history")
-        .insert(row)
-        .execute()
-    )
+    try:
 
-    if response.data:
+        response = (
+            client
+            .table("workout_history")
+            .insert(row)
+            .execute()
+        )
+
+    except Exception:
+
+        return None
+
+    # IMPORTANT:
+    # Only report success when Supabase actually
+    # returned the inserted row.
+    if (
+        response
+        and response.data
+        and isinstance(
+            response.data[0],
+            dict,
+        )
+    ):
+
         return response.data[0]
 
     return None
@@ -528,24 +632,30 @@ def load_workout_history_from_supabase(
     if client is None:
         return []
 
-    response = (
-        client
-        .table("workout_history")
-        .select("*")
-        .eq(
-            "profile_id",
-            profile_id,
+    try:
+
+        response = (
+            client
+            .table("workout_history")
+            .select("*")
+            .eq(
+                "profile_id",
+                profile_id,
+            )
+            .order(
+                "workout_date",
+                desc=False,
+            )
+            .order(
+                "workout_time",
+                desc=False,
+            )
+            .execute()
         )
-        .order(
-            "workout_date",
-            desc=False,
-        )
-        .order(
-            "workout_time",
-            desc=False,
-        )
-        .execute()
-    )
+
+    except Exception:
+
+        return []
 
     history: list[dict[str, Any]] = []
 
@@ -581,17 +691,23 @@ def get_latest_profile_id() -> str | None:
     if client is None:
         return None
 
-    response = (
-        client
-        .table("profiles")
-        .select("id")
-        .order(
-            "created_at",
-            desc=True,
+    try:
+
+        response = (
+            client
+            .table("profiles")
+            .select("id")
+            .order(
+                "created_at",
+                desc=True,
+            )
+            .limit(1)
+            .execute()
         )
-        .limit(1)
-        .execute()
-    )
+
+    except Exception:
+
+        return None
 
     if not response.data:
         return None
@@ -599,3 +715,35 @@ def get_latest_profile_id() -> str | None:
     return response.data[0].get(
         "id"
     )
+# ============================================================
+# PROGRESS RESET UTILITY (SOFT RESET)
+# ============================================================
+
+def reset_user_progress_soft() -> bool:
+    import streamlit as st
+    from utils.storage import DATA_DIR, _get_supabase_client, get_latest_profile_id
+    
+    local_files = ["workout_plan.json", "workout_history.json"]
+    for f in local_files:
+        path = DATA_DIR / f
+        if path.exists():
+            try:
+                path.unlink()
+            except OSError:
+                pass
+                
+    client = _get_supabase_client()
+    if client is not None:
+        try:
+            pid = get_latest_profile_id()
+            if pid:
+                client.table("workout_history").delete().eq("profile_id", pid).execute()
+                client.table("workout_plans").delete().eq("profile_id", pid).execute()
+            else:
+                client.table("workout_history").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
+                client.table("workout_plans").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
+        except Exception as e:
+            st.sidebar.error(f"Cloud reset error: {str(e)}")
+            return False
+            
+    return True
