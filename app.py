@@ -2755,86 +2755,57 @@ elif st.session_state.page == "Progress":
 
 elif st.session_state.page == "AI Coach":
 
-    st.title("🤖 AI Workout Coach")
+    st.title("?? AI Workout Coach")
 
-    profile = (
-        st.session_state.profile
-    )
-
-    workout_plan = (
-        st.session_state.workout_plan
-    )
-
-    workout_history = (
-        st.session_state.workout_history
-    )
+    profile = st.session_state.get("profile", {})
+    workout_plan = st.session_state.get("workout_plan", [])
+    workout_history = st.session_state.get("workout_history", [])
 
     if not profile:
-
-        st.warning(
-            "Please create your profile first."
-        )
-
+        st.warning("Please create your profile first.")
     else:
+        st.caption(f"?? Active Model Layer: {GEMINI_MODEL}")
+        st.write("---")
+        
+        # Initialize thread state data array memory
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = [
+                {"role": "assistant", "content": f"Hello {profile.get('name', 'Athlete')}! ?? I have analyzed your workout splits and neck recovery limitations. Let\'s discuss scaling your exercises safely!"}
+            ]
 
-        st.write(
-            "Ask your AI coach about your workouts, "
-            "exercises, progression, recovery, or training."
-        )
+        # Render dialogue messages in chronological order inside native layout bubbles
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
 
-        st.caption(
-            f"🟢 Gemini AI: {GEMINI_MODEL}"
-        )
-
-        question = st.text_area(
-            "What would you like to ask?",
-            placeholder=(
-                "Example: How should I progress my bench press "
-                "over the next few weeks?"
-            ),
-            height=120,
-        )
-
-        if st.button(
-            "Ask AI Coach 🤖",
-            type="primary",
-        ):
-
-            if not question.strip():
-
-                st.warning(
-                    "Please enter a question first."
-                )
-
-            else:
-
-                with st.spinner(
-                    "Your Gemini AI coach is thinking..."
-                ):
-
+        # Mount a sticky bottom chat input bubble layer block cell text row hook
+        if user_query := st.chat_input("Ask a follow-up about your exercise targets or neck limits..."):
+            
+            # Render user query instantly on screen canvas canvas elements
+            with st.chat_message("user"):
+                st.markdown(user_query)
+                
+            st.session_state.chat_history.append({"role": "user", "content": user_query})
+            
+            # Combine history array strings into a contextual prompt for Gemini
+            prompt_builder = []
+            for item in st.session_state.chat_history[-5:]:
+                prefix = "User: " if item["role"] == "user" else "Coach: "
+                prompt_builder.append(f"{prefix}{item['content']}")
+                
+            combined_context_query = "\n".join(prompt_builder) + "\n\nProvide your next direct answer back as the AI coach matching this dialogue history context."
+            
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
                     try:
-
-                        answer = ask_ai_coach(
-                            question,
+                        coach_response = ask_ai_coach(
+                            combined_context_query,
                             profile,
                             workout_plan,
                             workout_history,
                         )
-
-                        st.subheader(
-                            "Coach's Answer"
-                        )
-
-                        st.markdown(
-                            answer
-                        )
-
-                    except Exception as error:
-
-                        st.error(
-                            "The AI coach could not respond."
-                        )
-
-                        st.caption(
-                            f"Error: {error}"
-                        )
+                        st.markdown(coach_response)
+                        st.session_state.chat_history.append({"role": "assistant", "content": coach_response})
+                    except Exception as e:
+                        st.error(f"Failed to compile response item logic: {str(e)}")
+            st.rerun()
