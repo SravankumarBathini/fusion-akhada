@@ -821,29 +821,18 @@ def render_workout_logger(
                     )
 
                 with col2:
-
-                    weight = st.number_input(
-                        f"Weight (kg) ?? {target_weight:.1f}kg" if target_weight > 0.0 else f"Weight (kg) ?? {target_weight:.1f}kg" if target_weight > 0.0 else "Weight (kg)",
-                        min_value=0.0,
-                        max_value=500.0,
-                        value=float(
-                            set_data.get(
-                                "weight_kg",
-                                0.0,
-                            )
-                        ),
-                        step=0.5,
-                        key=(
-                            f"weight_"
-                            f"{exercise_index}_"
-                            f"{set_index}"
-                        ),
-                    )
-
+                    ex_name_lower = exercise.get("name", "").lower()
+                    ex_eq_lower = exercise.get("equipment", "").lower()
+                    is_bodyweight = any(kw in ex_name_lower or kw in ex_eq_lower for kw in ["bodyweight", "push-up", "pull-up", "plank", "dip", "chin-up", "crunch", "sit-up", "air squat", "no equipment"])
+                    if is_bodyweight:
+                        weight = 0.0
+                        st.number_input("Weight (kg)", value=0.0, disabled=True, key=f"bw_weight_{exercise_index}_{set_index}")
+                    else:
+                        weight = st.number_input("Weight (kg)" if target_weight <= 0.0 else f"Weight (Target: {target_weight:.1f}kg)", min_value=0.0, max_value=500.0, value=float(set_data.get("weight_kg", 0.0)), step=0.5, key=f"weight_{exercise_index}_{set_index}")
                 with col3:
 
                     reps = st.number_input(
-                        f"Reps ?? {target_reps}" if target_weight > 0.0 else f"Reps ?? {target_reps}" if target_weight > 0.0 else "Reps",
+                        f"Reps {target_reps}" if target_weight > 0.0 else f"Reps {target_reps}" if target_weight > 0.0 else "Reps",
                         min_value=0,
                         max_value=200,
                         value=int(

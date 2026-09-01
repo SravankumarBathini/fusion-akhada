@@ -55,6 +55,17 @@ st.set_page_config(
     page_icon="🏋️‍♂️",
     layout="wide",
 )
+st.markdown("""
+        <style>
+            /* Dynamic Bodyweight UI Rule: When an input card possesses a zero placeholder value, fade the weight cell container visually */
+            div[data-testid="stMarkdownContainer"] p:contains("Weight") + div input[value="0.0"],
+            div[data-testid="stNumberInput"]-ext-disabled {
+                opacity: 0.25;
+                pointer-events: none;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
 
 # Secure User Multi-Tenant Gatekeeper
 if "user" not in st.session_state:
@@ -745,7 +756,7 @@ with st.sidebar.expander("Danger Zone 🚨", expanded=False):
                 # Instantly strip volatile states in active session memory
                 st.session_state.workout_plan = []
                 st.session_state.workout_history = []
-                st.session_state.cloud_data_loaded = False
+                st.session_state.cloud_data_loaded = True
                 st.session_state.page = "Dashboard"
                 
                 st.toast("Testing profiles cleared successfully!")
@@ -1707,6 +1718,13 @@ elif st.session_state.page == "My Profile":
         help="Example: running, burpees",
     )
 
+    physical_injuries = st.text_area(
+        "Physical Injuries & Structural Limitations",
+        value=profile.get("physical_injuries", ""),
+        placeholder="e.g., Lower back pain during squats, torn rotator cuff, or knee stiffness...",
+        help="Critical health data used by the AI to structure a safe training routine",
+    ).strip()
+
     if st.button(
         "Save Profile 💾",
         type="primary",
@@ -1729,6 +1747,7 @@ elif st.session_state.page == "My Profile":
             "workout_intensity": workout_intensity,
             "exercises_enjoy": exercises_enjoy,
             "exercises_to_avoid": exercises_to_avoid,
+            "physical_injuries": physical_injuries,
         }
 
         try:
@@ -1770,9 +1789,9 @@ elif st.session_state.page == "My Profile":
                 updated_profile
             )
 
-            st.session_state.profile_created = (
-                True
-            )
+            st.session_state.profile_created = True
+            st.session_state.cloud_data_loaded = True
+            st.toast("Profile memory updated successfully! ??")
 
             st.success(
                 "Profile saved successfully! ✅"
