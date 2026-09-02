@@ -8,6 +8,41 @@ from pathlib import Path
 
 import streamlit as st
 
+# ============================================================
+# MASTER PRODUCTION AKHADA SAFFRON THEME INJECTION
+# ============================================================
+st.markdown("""
+<style>
+    /* Force midnight canvas background matching the sidebar */
+    .stApp, div[data-testid="stAppViewContainer"], .main, [data-testid="stMainSpaceContainer"] {
+        background-color: #171B26 !important;
+        background: #171B26 !important;
+    }
+    
+    /* Enforce high-visibility white typography cross-cohesion */
+    h1, h2, h3, h4, h5, h6, p, label, span, .stMarkdown {
+        color: #FFFFFF !important;
+    }
+    
+    /* Elegant Saffron Highlights for your metric numbers */
+    div[data-testid="stMetricValue"] {
+        color: #FF6B00 !important;
+        font-weight: 800 !important;
+    }
+    div[data-testid="stMetricLabel"] {
+        color: #94A3B8 !important;
+    }
+
+    /* Core logging frames */
+    input, select, textarea, div[data-baseweb="input"], .stNumberInput input {
+        background-color: #222533 !important;
+        color: #FFFFFF !important;
+        border: 1px solid #33384F !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+
 from modules.workout_generator import (
     normalize_workout_plan,
     generate_weekly_plan,
@@ -74,28 +109,7 @@ if "user" not in st.session_state:
     st.stop()
 
 # Dynamic Premium Equipment Background Engine
-def inject_premium_dashboard_background():
-    # Utilizing high-contrast minimalist equipment texture backdrop with linear opacity mask
-    bg_css = """
-    <style>
-    [data-testid="stAppViewContainer"] {
-        background: linear-gradient(rgba(253, 251, 247, 0.94), rgba(253, 251, 247, 0.94)), 
-                    url("https://unsplash.com");
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
-    }
-    /* Increase opacity for inner secondary data cards to keep telemetry sharp */
-    [data-testid="stMetricBlock"], [data-testid="stForm"] {
-        background-color: rgba(243, 244, 246, 0.97) !important;
-        border: 1px solid rgba(185, 28, 28, 0.15) !important;
-    }
-    </style>
-    """
-    st.markdown(bg_css, unsafe_allow_html=True)
-
-# Trigger global canvas styling
-inject_premium_dashboard_background()
+# Rogue background function stripped successfully to protect theme mechanics
 
 
 # ============================================================
@@ -287,6 +301,11 @@ if not st.session_state.cloud_data_loaded:
     st.session_state.profile_created = bool(
         loaded_profile
     )
+
+    # Structural Metric Enforcement Layer: Secure live history count on initial data extraction
+    if loaded_workout_history:
+        st.session_state.total_workouts = len(loaded_workout_history)
+        st.session_state.current_streak = len(loaded_workout_history)
 
     st.session_state.workout_plan = (
         loaded_workout_plan or []

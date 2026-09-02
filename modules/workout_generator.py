@@ -21,7 +21,7 @@ def generate_weekly_plan(_profile, exercise_database=None):
     duration = _profile.get("workout_duration", 45)
     intensity = _profile.get("workout_intensity", "Moderate")
     equipment = _profile.get("equipment", ["No equipment"])
-    injury = _profile.get("physical_injuries", "None disclosed")
+    injury = _profile.get("physical_injuries") or _profile.get("injuries_and_limitations") or "None disclosed"
     avoid = _profile.get("exercises_to_avoid", "None")
 
     splits = {
