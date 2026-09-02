@@ -11,17 +11,18 @@ def _get_api_key():
         st.error(f"? AI GENERATION ENGINE CRASHED: {str(e)}")
         return os.getenv("GEMINI_API_KEY")
 
-def generate_weekly_plan(profile, exercise_database=None):
+@st.cache_data(ttl=3600, show_spinner="Connecting to Akhada Cloud... Crafting your custom Hybrid Western & Traditional Indian Vyayam split...")
+def generate_weekly_plan(_profile, exercise_database=None):
     api_key = _get_api_key()
-    days_per_week = int(profile.get("days_per_week", 3))
-    workout_style = profile.get("workout_style", "Mixed Training")
-    fitness_goal = profile.get("fitness_goal", "General Fitness")
-    fitness_level = profile.get("fitness_level", "Beginner")
-    duration = profile.get("workout_duration", 45)
-    intensity = profile.get("workout_intensity", "Moderate")
-    equipment = profile.get("equipment", ["No equipment"])
-    injury = profile.get("physical_injuries", "None disclosed")
-    avoid = profile.get("exercises_to_avoid", "None")
+    days_per_week = int(_profile.get("days_per_week", 3))
+    workout_style = _profile.get("workout_style", "Mixed Training")
+    fitness_goal = _profile.get("fitness_goal", "General Fitness")
+    fitness_level = _profile.get("fitness_level", "Beginner")
+    duration = _profile.get("workout_duration", 45)
+    intensity = _profile.get("workout_intensity", "Moderate")
+    equipment = _profile.get("equipment", ["No equipment"])
+    injury = _profile.get("physical_injuries", "None disclosed")
+    avoid = _profile.get("exercises_to_avoid", "None")
 
     splits = {
         1: ["Full Body"],
