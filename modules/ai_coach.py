@@ -1,513 +1,95 @@
 import os
-from typing import Any
-
+import json
 import streamlit as st
 from google import genai
+from google.genai import types
 
-from modules.analytics import (
-    format_training_intelligence,
-)
-
-
-# ============================================================
-# GEMINI CONFIGURATION
-# ============================================================
-
+# Using the active production model designation
 GEMINI_MODEL = "gemini-3.6-flash"
 
-
-# ============================================================
-# GEMINI INITIALIZATION
-# ============================================================
-
-def _get_api_key():
+def ask_ai_coach(question: str, profile: dict, workout_plan: list, workout_history: list) -> str:
     """
-    Read Gemini API key from Streamlit secrets first,
-    then fall back to environment variables.
+    Analyzes conversation context. If the user explicitly asks to modify, update, 
+    add, or swap exercises in their workout, the model outputs a structured update 
+    command alongside a conversational response.
+    """
+    api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
+    
+    if not api_key:
+        return "?? **AI Coach Offline:** Missing `GEMINI_API_KEY`. Please configure it in your environment or Streamlit Secrets dashboard to unlock your AI Coach."
+
+    client = genai.Client(api_key=api_key)
+
+    # 1. Provide an elite master trainer persona that can update plans on the fly
+    system_prompt = f"""
+    You are an elite master strength coach specializing in Hybrid Functional Training (Western & traditional Indian Vyayam/Akhada culture).
+    You have direct authority to modify the user's active workout plan based on your conversation.
+    
+    ATHLETE PROFILE DATA:
+    - Goals: {profile.get('fitness_goal', 'General Fitness')}
+    - Level: {profile.get('fitness_level', 'Intermediate')}
+    - Equipment: {profile.get('equipment', ['Bodyweight'])}
+    - Physical Injuries/Limitations: {profile.get('physical_injuries', 'None')}
+    - Exercises to Avoid: {profile.get('exercises_to_avoid', 'None')}
+    
+    CURRENT ACTIVE WORKOUT PLAN:
+    {json.dumps(workout_plan, indent=2)}
+
+    CRITICAL INSTRUCTIONS:
+    Evaluate the user's input message. 
+    - If they are simply asking a general question, return a supportive answer and leave `updated_workout_plan` as null.
+    - If they ask to update, add, delete, replace, or modify an exercise or day in their routine (e.g., "replace dands with floor press", "add gada swings to day 1"), you MUST rewrite the relevant parts of the workout plan JSON schema while respecting their injury profile.
+    
+    You must respond strictly in this JSON format:
+    {{
+        "coach_response": "Your conversational reply to the user explaining what changes were made or answering their question.",
+        "requires_plan_update": true (set to true ONLY if they commanded a change, false otherwise),
+        "updated_workout_plan": [ ... The entire updated workout plan array matching the exact incoming JSON list structure with your modified exercises, sets, or reps injected ... ] or null if no change requested.
+    }}
     """
 
     try:
-        api_key = st.secrets.get(
-            "GEMINI_API_KEY"
-        )
-    except Exception:
-        api_key = None
-
-    if not api_key:
-        api_key = os.getenv(
-            "GEMINI_API_KEY"
-        )
-
-    if not api_key:
-        raise RuntimeError(
-            "GEMINI_API_KEY is not configured "
-            "in Streamlit secrets or environment variables."
-        )
-
-    return api_key
-
-
-def _create_gemini_client():
-    """
-    Create and return a Gemini API client.
-    """
-
-    api_key = _get_api_key()
-
-    return genai.Client(
-        api_key=api_key
-    )
-
-
-# ============================================================
-# DATA FORMATTERS
-# ============================================================
-
-def _format_profile(
-    profile: dict[str, Any],
-) -> str:
-
-    if not profile:
-        return (
-            "No profile information available."
-        )
-
-    equipment = profile.get(
-        "equipment",
-        [],
-    )
-
-    target_areas = profile.get(
-        "target_areas",
-        [],
-    )
-
-    if not isinstance(
-        equipment,
-        list,
-    ):
-        equipment = []
-
-    if not isinstance(
-        target_areas,
-        list,
-    ):
-        target_areas = []
-
-    return f"""
-Name: {profile.get("name", "Unknown")}
-Age: {profile.get("age", "Unknown")}
-Gender: {profile.get("gender", "Unknown")}
-Height: {profile.get("height", "Unknown")} cm
-Weight: {profile.get("weight", "Unknown")} kg
-
-Fitness goal: {profile.get("fitness_goal", "Unknown")}
-Fitness level: {profile.get("fitness_level", "Unknown")}
-Workout location: {profile.get("workout_location", "Unknown")}
-
-Days per week: {profile.get("days_per_week", "Unknown")}
-Workout duration: {profile.get("workout_duration", "Unknown")} minutes
-
-Equipment:
-{", ".join(equipment)}
-
-Target areas:
-{", ".join(target_areas)}
-
-Workout style:
-{profile.get("workout_style", "Unknown")}
-
-Workout intensity:
-{profile.get("workout_intensity", "Unknown")}
-
-Exercises the user enjoys:
-{profile.get("exercises_enjoy", "None specified")}
-
-Exercises the user wants to avoid:
-{profile.get("exercises_to_avoid", "None specified")}
-"""
-
-
-def _format_workout_plan(
-    workout_plan,
-) -> str:
-
-    if not workout_plan:
-        return (
-            "No workout plan currently available."
-        )
-
-    lines = []
-
-    for workout_day in workout_plan:
-
-        day_number = workout_day.get(
-            "day",
-            "",
-        )
-
-        name = workout_day.get(
-            "name",
-            "Workout",
-        )
-
-        duration = workout_day.get(
-            "duration",
-            "",
-        )
-
-        intensity = workout_day.get(
-            "intensity",
-            "",
-        )
-
-        lines.append(
-            f"\nDay {day_number}: {name}"
-        )
-
-        lines.append(
-            f"Duration: {duration} minutes"
-        )
-
-        lines.append(
-            f"Intensity: {intensity}"
-        )
-
-        for exercise in workout_day.get(
-            "exercises",
-            [],
-        ):
-
-            exercise_name = exercise.get(
-                "name",
-                "Exercise",
+        # Request strict structured JSON mapping from Gemini
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=f"{system_prompt}\n\nUser Message: {question}",
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json"
             )
-
-            sets = exercise.get(
-                "sets",
-                "-",
-            )
-
-            reps = exercise.get(
-                "reps",
-                "-",
-            )
-
-            equipment = exercise.get(
-                "equipment",
-                "-",
-            )
-
-            lines.append(
-                f"- {exercise_name}: "
-                f"{sets} sets x {reps} reps "
-                f"({equipment})"
-            )
-
-    return "\n".join(lines)
-
-
-def _format_workout_history(
-    workout_history,
-) -> str:
-
-    if not workout_history:
-        return (
-            "No completed workouts have "
-            "been logged yet."
         )
+        
+        # Parse the AI response block
+        result = json.loads(response.text)
+        coach_reply = result.get("coach_response", "Routines processed successfully.")
+        
+        # 2. Check if a dynamic plan mutation command was triggered
+        if result.get("requires_plan_update") and result.get("updated_workout_plan"):
+            st.session_state.workout_plan = result["updated_workout_plan"]
+            
+            # Persist changes dynamically based on the current storage source
+            from utils.storage import is_supabase_available, save_workout_plan_to_supabase, save_json
+            profile_id = st.session_state.get("profile_id")
+            
+            if profile_id and is_supabase_available() and st.session_state.get("storage_source") == "supabase":
+                save_workout_plan_to_supabase(profile_id, result["updated_workout_plan"])
+            else:
+                from utils.storage import DATA_DIR
+                save_json(DATA_DIR / "workout_plan.json", result["updated_workout_plan"])
+                
+            coach_reply += "\n\n?? *System Note: Your active 'My Workout' logging table has been updated dynamically!*"
+            
+        return coach_reply
+        
+    except Exception as e:
+        return f"? **AI Coach Exception:** Failed to parse context or execute conversational overrides. Details: {str(e)}"
 
-    lines = []
-
-    recent_history = workout_history[-20:]
-
-    for workout in recent_history:
-
-        date = workout.get(
-            "date",
-            "Unknown date",
-        )
-
-        workout_name = workout.get(
-            "workout_name",
-            "Workout",
-        )
-
-        duration = workout.get(
-            "actual_duration",
-            "-",
-        )
-
-        total_sets = workout.get(
-            "total_sets",
-            0,
-        )
-
-        total_volume = workout.get(
-            "total_volume",
-            0,
-        )
-
-        lines.append(
-            f"\n{date} — {workout_name}"
-        )
-
-        lines.append(
-            f"Duration: {duration} minutes"
-        )
-
-        lines.append(
-            f"Completed sets: {total_sets}"
-        )
-
-        lines.append(
-            f"Total volume: {total_volume} kg"
-        )
-
-        for exercise in workout.get(
-            "exercises",
-            [],
-        ):
-
-            exercise_name = exercise.get(
-                "name",
-                "Exercise",
-            )
-
-            completed = exercise.get(
-                "completed",
-                False,
-            )
-
-            status = (
-                "Completed"
-                if completed
-                else "Not completed"
-            )
-
-            lines.append(
-                f"  {exercise_name}: {status}"
-            )
-
-            for set_data in exercise.get(
-                "sets",
-                [],
-            ):
-
-                if not set_data.get(
-                    "completed",
-                    False,
-                ):
-                    continue
-
-                weight = set_data.get(
-                    "weight_kg",
-                    0,
-                )
-
-                reps = set_data.get(
-                    "actual_reps",
-                    0,
-                )
-
-                volume = set_data.get(
-                    "volume",
-                    0,
-                )
-
-                lines.append(
-                    f"    Set "
-                    f"{set_data.get('set_number', '-')}: "
-                    f"{weight} kg x "
-                    f"{reps} reps "
-                    f"= {volume} kg volume"
-                )
-
-    return "\n".join(lines)
-
-
-# ============================================================
-# SYSTEM PROMPT
-# ============================================================
-
-def _build_system_prompt(
-    profile,
-    workout_plan,
-    workout_history,
-):
-
-    training_intelligence = (
-        format_training_intelligence(
-            workout_history
-        )
-    )
-
-    return f"""
-You are the personal AI workout coach inside a workout
-tracking application.
-
-Your job is to provide practical, personalized,
-evidence-informed training guidance using:
-
-1. The user's profile.
-2. The current workout plan.
-3. Logged workout history.
-4. Calculated training intelligence.
-
-IMPORTANT RULES:
-
-1. Use actual user data whenever possible.
-2. Never invent weights, reps, workouts, PRs,
-   or historical events.
-3. If information is unavailable, say so.
-4. Respect available equipment.
-5. Respect exercises the user wants to avoid.
-6. Consider the user's fitness goal and experience.
-7. Use progressive overload appropriately.
-8. Consider recent training and recovery.
-9. Do not make major programming changes based
-   on one isolated session.
-10. Distinguish facts from coaching recommendations.
-11. Prefer actionable recommendations.
-12. Do not diagnose medical conditions.
-13. For significant pain, injury symptoms,
-    chest pain, dizziness, or other concerning
-    symptoms, recommend appropriate medical
-    evaluation.
-14. Never claim to have observed exercise form.
-15. Never pretend the data says something it does not.
-16. Do not automatically change the user's workout plan.
-17. When recommending progression, explain exactly
-    what should change and why.
-
-TRAINING INTELLIGENCE RULE:
-
-Use the calculated training intelligence as a
-high-level summary of the user's actual data.
-
-Do not blindly interpret a positive or negative
-volume change as good or bad. Consider context,
-training frequency, exercise selection, goal,
-and recent sessions.
-
-COACHING STYLE:
-
-- Clear
-- Practical
-- Specific
-- Training-focused
-- Encouraging without excessive praise
-- Concise enough for an application
-- Use headings and bullets when useful
-
-USER PROFILE:
-{_format_profile(profile)}
-
-CURRENT WORKOUT PLAN:
-{_format_workout_plan(workout_plan)}
-
-TRAINING INTELLIGENCE:
-{training_intelligence}
-
-RECENT RAW WORKOUT HISTORY:
-{_format_workout_history(workout_history)}
-"""
-
-
-# ============================================================
-# AI COACH
-# ============================================================
-
-def ask_ai_coach(
-    question,
-    profile,
-    workout_plan,
-    workout_history,
-):
-
-    if not question or not question.strip():
-        raise ValueError(
-            "Please enter a question."
-        )
-
-    client = _create_gemini_client()
-
-    system_prompt = _build_system_prompt(
-        profile,
-        workout_plan,
-        workout_history,
-    )
-
-    user_prompt = f"""
-USER'S QUESTION:
-
-{question.strip()}
-
-Answer the user's question directly.
-
-Use the user's training intelligence and history
-when relevant.
-
-Do not repeat the entire profile, plan, or history.
-
-If recommending a change, make it specific and
-practical.
-
-If the available data is insufficient to make a
-strong recommendation, say what additional data
-would help.
-"""
-
-    interaction = client.interactions.create(
-        model=GEMINI_MODEL,
-        input=user_prompt,
-        system_instruction=system_prompt,
-    )
-
-    answer = getattr(
-        interaction,
-        "output_text",
-        None,
-    )
-
-    if not answer:
-        raise RuntimeError(
-            "Gemini returned an empty response."
-        )
-
-    return answer.strip()
-
-import streamlit as st
-from google import genai
-import os
-
-def run_adaptive_rules_engine(metrics: dict) -> dict:
-    rpe, soreness, energy = metrics.get("rpe", 7), metrics.get("soreness", 2), metrics.get("energy", 3)
-    status, set_mod, rep_mod = "Normal", 0, 0
-    if rpe >= 9 or soreness >= 4:
-        status, set_mod, rep_mod = "Deload Adaptive Cycle", -1, -2
-    elif energy >= 4 and soreness <= 2:
-        status, rep_mod = "Progressive Overload Cycle", 2
-    return {"cycle_status": status, "set_mod": set_mod, "rep_mod": rep_mod}
-
-@st.cache_data(ttl="1h", show_spinner=False)
-def generate_coach_descriptive_feedback(metrics: dict, adjustment: dict, current_split: str) -> str:
-    key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
-    if not key: return "?? Gemini API key configuration missing."
-    try:
-        client = genai.Client(api_key=key)
-        prompt = f"As elite athletic coach analyze: Split={current_split}. RPE={metrics.get("rpe")}, Soreness={metrics.get("soreness")}, Energy={metrics.get("energy")}. Cycle={adjustment["cycle_status"]}. Output 3 actionable bullet cues."
-        return client.models.generate_content(model="gemini-3.6-flash", contents=prompt).text
-    except Exception as e: return f"AI Engine Error: {str(e)}"
-
-def render_ai_coach_dashboard_ui(metrics: dict, current_split: str):
-    st.subheader("Adaptive AI Coach Engine")
-    adj = run_adaptive_rules_engine(metrics)
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Target Cycle Execution", adj["cycle_status"])
-    c2.metric("Set Adjustments", f"{adj["set_mod"]} Sets")
-    c3.metric("Rep Adjustments", f"{adj["rep_mod"]} Reps")
+def render_ai_coach_dashboard_ui(metrics, workout_name):
+    import streamlit as st
     st.write("---")
-    st.markdown("**Coach program directives:**")
-    with st.spinner("Processing bio-telemetry..."):
-        st.info(generate_coach_descriptive_feedback(metrics, adj, current_split))
+    st.markdown("### 🤖 Akhada AI Telemetry Check")
+    st.caption(f"Analyzing metrics parameters for active track: **{workout_name}**")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Target RPE Load", f"{metrics.get('rpe', 7)}/10")
+    c2.metric("Soreness Delta", f"{metrics.get('soreness', 2)}/5")
+    c3.metric("Energy Capacity", f"{metrics.get('energy', 3)}/5")
+    st.info("💡 **Coach Advice:** Head over to your dedicated **AI Coach** tab panel to casually command changes, replace movements, or adjust your traditional Vyayam sets via text chat instantly!")

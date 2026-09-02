@@ -369,7 +369,7 @@ def load_latest_profile_from_supabase() -> dict[str, Any] | None:
 
         return profile_data
 
-    return {
+    fallback_profile = {
         key: value
         for key, value in row.items()
         if key not in {
@@ -379,6 +379,9 @@ def load_latest_profile_from_supabase() -> dict[str, Any] | None:
             "updated_at",
         }
     }
+    if "physical_injuries" not in fallback_profile and "physical_injuries" in row:
+        fallback_profile["physical_injuries"] = row["physical_injuries"]
+    return fallback_profile
 
 
 # ============================================================

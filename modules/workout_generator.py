@@ -40,38 +40,48 @@ def generate_weekly_plan(profile, exercise_database=None):
     client = genai.Client(api_key=api_key)
     
     prompt = f"""
-    You are an elite personal fitness trainer. Create a highly customized, full-variety weekly training routine.
+    You are an elite master strength coach specializing in Hybrid Functional Training. Your unique expertise seamlessly blends modern Western hypertrophy/strength concepts with traditional Indian physical culture (Vyayam training patterns from ancient Akhadas).
+    
     Days per week: {days_per_week} days
-    Workout Style: {workout_style}
+    Workout Style: {workout_style} (Hybrid Western & Indian Traditional)
     Fitness Goal: {fitness_goal}
     Target Split Routine: {target_split}
     Available Equipment: {equipment}
 
+    CRITICAL GYMNASTIC & CULTURAL TRAINING RULES:
+    1. You MUST intentionally weave a beautiful blend of both modern Western training and traditional Indian movements into every single day's routine.
+    2. Incorporate traditional bodyweight and equipment-free variations natively:
+       - Different types of Dands: Sadha Dand, Hanuman Dand (for core/hip mobility), Ram Murti Dand (isometric/dynamic push), or Hindu Push-Ups.
+       - Sapate (Traditional Indian wrestler burpees combining squat, dand, and jump for explosive conditioning).
+       - Bethaks (Traditional deep squats) or Hanuman Bethaks.
+       - Spine Push Boards / Gymnastic blocks if applicable.
+    3. If the user lists heavy tools like "Mudgar", "Clubbells", "Mace", or "Gada" in their available equipment parameters, actively suggest rotational core movements like Gada 360 Swings, Mudgar rotations, or club patterns. If they only have dumbbells, adapt the dands/sapate movements natively!
+    
     CRITICAL HEALTH & SAFETY LIMITATIONS:
     The user has recorded this medical/injury background: "{injury}". Stated exercises to avoid: "{avoid}".
-    You must carefully select exercises that place ZERO structural stress on the injured zone. If neck surgery or upper back issues are present, absolutely avoid any heavy overhead loads, trap-intensive movements, or cervical spine loading. Focus instead on chest-supported machine rows, dumbbells down at your sides, or floor presses.
+    You must carefully select exercises that place ZERO structural stress on the injured zone. If neck surgery, cervical strain, or shoulder impingement is present, carefully adapt or substitute overhead Gada swings or extreme twisting dands. Ensure spinal alignment remains neutral.
 
-    For EACH split day, provide a unique selection of 4 to 5 highly distinct, real-world exercises. Do not repeat the same dummy titles across days.
+    For EACH split day, provide a unique selection of 4 to 5 highly distinct exercises. Do not repeat identical movements across days.
     
-    Return a valid JSON list containing exactly {days_per_week} distinct day objects following this structure:
+    Return a valid JSON list containing exactly {days_per_week} distinct day objects following this structural schema format:
     [
       {{
         "day": 1,
-        "name": "Workout Day Name",
+        "name": "Workout Day Name (e.g. Akhada Upper Body Strength)",
         "duration": {duration},
         "intensity": "{intensity}",
-        "warmup": "5-10 minutes",
-        "cooldown": "5 minutes",
+        "warmup": "5-10 minutes mobility",
+        "cooldown": "5 minutes stretching",
         "exercises": [
           {{
-            "name": "Exercise Name",
-            "equipment": "Required Equipment",
+            "name": "Exercise Name (e.g. Hanuman Dand)",
+            "equipment": "Bodyweight",
             "sets": 3,
             "reps": "8-12",
             "rest": "60s",
-            "primary_muscle": "Target Muscle Group",
-            "movement_pattern": "Movement Direction",
-            "instructions": "Brief step-by-step cue description."
+            "primary_muscle": "Chest & Shoulders",
+            "movement_pattern": "Compound Push",
+            "instructions": "Flow from downward dog into a deep sweeping push-up, bringing one leg forward dynamically."
           }}
         ]
       }}
@@ -89,14 +99,15 @@ def generate_weekly_plan(profile, exercise_database=None):
         return json.loads(response.text)
     except Exception as e:
         st.error(f"? AI GENERATION ENGINE CRASHED: {str(e)}")
+        # Secure structural fallback logic rows if JSON token structures ever hit anomalies
         weekly_plan = []
         for i, d_name in enumerate(target_split, start=1):
             weekly_plan.append({
-                "day": i, "name": d_name, "duration": duration, "intensity": intensity, "warmup": "5 mins", "cooldown": "5 mins",
+                "day": i, "name": f"Hybrid {d_name} Split", "duration": duration, "intensity": intensity, "warmup": "5 mins", "cooldown": "5 mins",
                 "exercises": [
+                    {"name": "Traditional Sadha Dand", "equipment": "Bodyweight", "sets": 3, "reps": "12", "rest": "60s", "primary_muscle": "Chest", "movement_pattern": "Compound Push", "instructions": "Deep arching fluid pushups."},
                     {"name": "Dumbbell Floor Press", "equipment": "Dumbbells", "sets": 3, "reps": "12", "rest": "60s", "primary_muscle": "Chest", "movement_pattern": "Horizontal Push", "instructions": ""},
-                    {"name": "Glute Bridges", "equipment": "Bodyweight", "sets": 3, "reps": "15", "rest": "60s", "primary_muscle": "Glutes", "movement_pattern": "Hinge", "instructions": ""},
-                    {"name": "Bodyweight Air Squats", "equipment": "Bodyweight", "sets": 3, "reps": "12", "rest": "60s", "primary_muscle": "Legs", "movement_pattern": "Squat", "instructions": ""}
+                    {"name": "Wrestler Sapate", "equipment": "Bodyweight", "sets": 3, "reps": "10", "rest": "60s", "primary_muscle": "Full Body", "movement_pattern": "Explosive conditioning", "instructions": "Fluid combo of squats and dands."}
                 ]
             })
         return weekly_plan
