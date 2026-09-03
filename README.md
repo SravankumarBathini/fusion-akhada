@@ -13,7 +13,7 @@ A robust, data-driven full-stack fitness management dashboard engineered to auto
 - **Frontend & Core Engine:** [Streamlit](https://streamlit.io) (State-driven reactive interface)
 - **Programming Language:** Python 3.11+
 - **Cloud Backend & Database:** [Supabase](https://supabase.com) (PostgreSQL cloud storage data broker)
-- **Authentication:** Custom Session-State Intercept Guards (Multi-tenant isolation)
+- **Authentication:** Supabase Auth with restored Streamlit session tokens
 
 ---
 
@@ -36,7 +36,7 @@ Processes real-time workout logging inputs to display historical metrics includi
 ## Project Workspace Topology
 
 ```text
-+-- data/                       # Local profile storage & fallback caches
++-- data/                       # Static exercise-catalog fallback only
 +-- config/
 +   +-- settings.py             # Central application paths and integration names
 +   +-- secrets.py              # Streamlit/.env/environment resolution
@@ -47,7 +47,7 @@ Processes real-time workout logging inputs to display historical metrics includi
 +   +-- performance.py          # Pure exercise performance aggregation
 +   +-- dashboard_metrics.py    # Pure dashboard calculations
 +-- application/
-+   +-- data_loader.py          # Cloud-first bootstrap with local fallback
++   +-- data_loader.py          # Cloud-first bootstrap and catalog fallback
 +   +-- workout_plans.py        # Domain workout-plan use cases
 +-- infrastructure/
 +   +-- json_repository.py      # Filesystem JSON persistence

@@ -2,10 +2,11 @@ import unittest
 
 from domain.dashboard_metrics import get_weekly_progress
 from domain.exercise_substitution import get_exercise_substitutions
-from domain.exercise_rules import get_exercise_instruction
+from domain.exercise_rules import get_exercise_instruction, get_exercise_coaching
 from domain.performance import get_progression_target
 from domain.program_presets import PROGRAM_PRESETS, get_program_preset
 from domain.workout_validation import has_duplicate_exercises
+from presentation.session_state import initialize_session_state
 
 
 class WorkoutDomainTests(unittest.TestCase):
@@ -52,6 +53,22 @@ class WorkoutDomainTests(unittest.TestCase):
             {"name": "Squat", "movement_pattern": "Squat"}
         )
         self.assertIn("chest tall", guidance)
+
+    def test_exercise_coaching_contains_beginner_cues(self):
+        coaching = get_exercise_coaching(
+            {"movement_pattern": "Horizontal Pull"}
+        )
+        self.assertEqual(len(coaching["steps"]), 3)
+        self.assertTrue(coaching["breathing"])
+        self.assertTrue(coaching["modification"])
+
+    def test_session_initialization_preserves_auth_session(self):
+        state = {"supabase_session": {"access_token": "existing"}}
+        initialize_session_state(state)
+        self.assertEqual(
+            state["supabase_session"]["access_token"],
+            "existing",
+        )
 
 
 

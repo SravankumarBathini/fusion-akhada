@@ -193,6 +193,7 @@ from domain.workout_validation import has_duplicate_exercises
 from domain.exercise_rules import (
     get_completed_exercises_count,
     get_exercise_instruction,
+    get_exercise_coaching,
     get_workouts_this_week,
     get_workouts_this_month,
 )
@@ -216,6 +217,7 @@ from infrastructure.storage import (
     load_json,
     save_json,
     is_supabase_available,
+    sign_out_supabase,
     save_profile_to_supabase,
     load_latest_profile_from_supabase,
     get_latest_profile_id,
@@ -334,6 +336,7 @@ if storage_source != "supabase":
         "then reload the page."
     )
     st.stop()
+st.sidebar.success("Cloud data synced with Supabase")
 
 # ============================================================
 # NORMALIZE WORKOUT PLAN
@@ -439,9 +442,14 @@ else:
 st.sidebar.markdown("---")
 # Isolated User Session Eraser Loop
 if st.sidebar.button("🚪 Log Out of Session", use_container_width=True):
-    st.session_state.clear()
-    st.success("Session disconnected successfully! Clearing active arrays...")
-    st.rerun()
+    try:
+        sign_out_supabase()
+    except Exception as error:
+        st.error(f"Could not end the Supabase session: {error}")
+    else:
+        st.session_state.clear()
+        st.success("Signed out securely. Your cloud data was not deleted.")
+        st.rerun()
 with st.sidebar.expander("Danger Zone 🚨", expanded=False):
     st.write("Wipe existing test logs to clear room for your true tracking data.")
     if st.button("Reset Progress & Start Fresh", type="primary", use_container_width=True):
@@ -1738,6 +1746,17 @@ elif st.session_state.page == "My Workout":
 
                     with st.expander("📖 How to perform this exercise"):
                         st.write(get_exercise_instruction(exercise))
+                        coaching = get_exercise_coaching(exercise)
+                        st.markdown("**Step-by-step**")
+                        for step_number, step in enumerate(
+                            coaching["steps"],
+                            start=1,
+                        ):
+                            st.write(f"{step_number}. {step}")
+                        st.write(f"**Breathing:** {coaching['breathing']}")
+                        st.write(f"**Avoid:** {coaching['mistakes']}")
+                        st.write(f"**Beginner option:** {coaching['modification']}")
+                        st.write(f"**Progress when ready:** {coaching['progression']}")
                         st.caption(
                             "Use a controlled range of motion and stop if you feel sharp pain."
                         )

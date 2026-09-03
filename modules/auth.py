@@ -31,6 +31,11 @@ def render_login_interface():
                         try:
                             res = client.auth.sign_in_with_password({"email": email, "password": password})
                             st.session_state["user"] = res.user
+                            if res.session is not None:
+                                st.session_state["supabase_session"] = {
+                                    "access_token": res.session.access_token,
+                                    "refresh_token": res.session.refresh_token,
+                                }
                             st.success("Authentication successful! Loading metrics...")
                             st.rerun()
                         except Exception as e:

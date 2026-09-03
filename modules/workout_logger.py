@@ -7,7 +7,10 @@ import streamlit as st
 
 from domain.performance import get_progression_target
 from domain.exercise_substitution import get_exercise_substitutions
-from domain.exercise_rules import get_exercise_instruction
+from domain.exercise_rules import (
+    get_exercise_instruction,
+    get_exercise_coaching,
+)
 
 
 # ============================================================
@@ -722,6 +725,17 @@ def render_workout_logger(
             st.caption(
                 f"📖 **How to perform:** {get_exercise_instruction(exercise)}"
             )
+            coaching = get_exercise_coaching(exercise)
+            with st.expander("Coach cues", expanded=False):
+                for step_number, step in enumerate(
+                    coaching["steps"],
+                    start=1,
+                ):
+                    st.write(f"{step_number}. {step}")
+                st.write(f"**Breathing:** {coaching['breathing']}")
+                st.write(f"**Common mistakes:** {coaching['mistakes']}")
+                st.write(f"**Beginner option:** {coaching['modification']}")
+                st.write(f"**Progression:** {coaching['progression']}")
 
             substitutions = get_exercise_substitutions(
                 exercise,

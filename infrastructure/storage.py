@@ -52,10 +52,18 @@ def _get_supabase_client() -> Client | None:
 
     try:
 
-        return create_client(
+        client = create_client(
             supabase_url,
             supabase_key,
         )
+        if st is not None:
+            auth_session = st.session_state.get("supabase_session")
+            if isinstance(auth_session, dict):
+                access_token = auth_session.get("access_token")
+                refresh_token = auth_session.get("refresh_token")
+                if access_token and refresh_token:
+                    client.auth.set_session(access_token, refresh_token)
+        return client
 
     except Exception:
         return None
@@ -72,6 +80,15 @@ def is_supabase_available() -> bool:
     """
 
     return _get_supabase_client() is not None
+
+
+def sign_out_supabase() -> None:
+    """End the current Supabase auth session before clearing UI state."""
+    client = _get_supabase_client()
+    if client is None:
+        return
+    if client.auth.get_session() is not None:
+        client.auth.sign_out()
 
 
 def _profiles_support_user_id(client: Client) -> bool:
