@@ -9,3 +9,8 @@ create index if not exists registration_events_registered_at_idx
     on public.registration_events(registered_at desc);
 
 alter table public.registration_events enable row level security;
+
+revoke all on public.registration_events from anon, authenticated;
+revoke all on sequence public.registration_events_id_seq from anon, authenticated;
+grant select, insert, update, delete on public.registration_events to service_role;
+grant usage, select on sequence public.registration_events_id_seq to service_role;

@@ -1,6 +1,9 @@
 import modules.auth as auth
 from infrastructure.storage import reset_user_progress_soft
-from infrastructure.registration_notifications import load_registration_events
+from infrastructure.registration_notifications import (
+    load_registration_events,
+    registration_admin_configured,
+)
 from config.logging_config import configure_logging
 from config.secrets import get_secret
 
@@ -2491,14 +2494,27 @@ elif st.session_state.page == "Progress":
 elif st.session_state.page == "Admin: Registrations":
     st.title("Admin Dashboard")
     st.caption("Registration activity visible only to the configured administrator.")
-    events = load_registration_events()
+    if not registration_admin_configured():
+        st.error(
+            "Admin data access is not configured. Add "
+            "SUPABASE_SERVICE_ROLE_KEY to local Streamlit secrets."
+        )
+    try:
+        events = load_registration_events()
+    except Exception:
+        logger.exception("Admin registration dashboard failed to load")
+        events = []
+        st.error(
+            "Registration data could not be loaded. Check the Supabase table "
+            "grants and application logs."
+        )
     if events:
         st.metric("Registered users", len(events))
         st.dataframe(events, use_container_width=True, hide_index=True)
     else:
         st.info(
-            "No registration events found. Configure the server-only "
-            "SUPABASE_SERVICE_ROLE_KEY and run database/002_registration_events.sql."
+            "No registered users found. Verify the service-role key belongs "
+            "to this Supabase project and that Supabase Auth contains users."
         )
 
 elif st.session_state.page == "AI Coach":
