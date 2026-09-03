@@ -100,6 +100,7 @@ New reusable logic should be added to the corresponding `domain`,
    - Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`.
    - Add your Supabase URL, anon key, and Gemini API key.
    - Run `database/001_add_profile_ownership.sql` in the Supabase SQL Editor.
+     This enables RLS for profiles, workout plans, and workout history.
    - Confirm `profiles.user_id` exists before creating profiles.
 
 For Streamlit Community Cloud, add the same values under

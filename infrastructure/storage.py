@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 try:
@@ -26,6 +27,14 @@ from config.settings import BASE_DIR, DATA_DIR, ENV_FILE
 
 from config.secrets import get_secret as _get_secret
 from config.secrets import load_dotenv_file as _load_dotenv_file
+
+
+logger = logging.getLogger(__name__)
+
+
+def _log_storage_error(operation: str, error: Exception) -> None:
+    """Record diagnostics without logging tokens or user workout payloads."""
+    logger.exception("Supabase storage operation failed: %s", operation)
 
 
 # ============================================================
@@ -65,7 +74,8 @@ def _get_supabase_client() -> Client | None:
                     client.auth.set_session(access_token, refresh_token)
         return client
 
-    except Exception:
+    except Exception as error:
+        _log_storage_error("create_client", error)
         return None
 
 
@@ -95,7 +105,8 @@ def _profiles_support_user_id(client: Client) -> bool:
     """Detect whether the deployed profiles schema has tenant ownership."""
     try:
         client.table("profiles").select("user_id").limit(1).execute()
-    except Exception:
+    except Exception as error:
+        _log_storage_error("check_profiles_schema", error)
         return False
     return True
 
@@ -224,7 +235,8 @@ def load_latest_profile_from_supabase(
         query = client.table("profiles").select("*").eq("user_id", user_id)
         response = query.order("created_at", desc=True).limit(1).execute()
 
-    except Exception:
+    except Exception as error:
+        _log_storage_error("load_profile", error)
 
         return None
 
@@ -318,7 +330,8 @@ def save_workout_plan_to_supabase(
             .execute()
         )
 
-    except Exception:
+    except Exception as error:
+        _log_storage_error("save_workout_plan", error)
 
         return None
 
@@ -366,7 +379,8 @@ def load_latest_workout_plan_from_supabase(
             .execute()
         )
 
-    except Exception:
+    except Exception as error:
+        _log_storage_error("load_workout_plan", error)
 
         return None
 
@@ -469,7 +483,8 @@ def save_workout_history_to_supabase(
             .execute()
         )
         return response.data[0] if response and response.data else {"workout_data": workout}
-    except Exception:
+    except Exception as error:
+        _log_storage_error("save_workout_history", error)
         return None
 
 
@@ -508,7 +523,8 @@ def load_workout_history_from_supabase(
             .execute()
         )
 
-    except Exception:
+    except Exception as error:
+        _log_storage_error("load_workout_history", error)
 
         return []
 
@@ -553,7 +569,8 @@ def get_latest_profile_id(user_id: str | None = None) -> str | None:
         query = client.table("profiles").select("id").eq("user_id", user_id)
         response = query.order("created_at", desc=True).limit(1).execute()
 
-    except Exception:
+    except Exception as error:
+        _log_storage_error("get_latest_profile_id", error)
 
         return None
 
@@ -587,8 +604,12 @@ def reset_user_progress_soft() -> bool:
             "profile_id",
             profile_id,
         ).execute()
-    except Exception as e:
-        _sidebar_message("error", f"Cloud reset error: {str(e)}")
+    except Exception as error:
+        _log_storage_error("reset_user_progress", error)
+        _sidebar_message(
+            "error",
+            "Cloud reset failed. Check the application logs and try again.",
+        )
         return False
 
     return True
