@@ -22,7 +22,7 @@ from presentation.session_state import initialize_session_state
 
 # Streamlit page configuration must be the first Streamlit command.
 st.set_page_config(
-    page_title="Personal Workout Trainer",
+    page_title="Fusion Akhada",
     page_icon="🏋️‍♂️",
     layout="wide",
 )
@@ -391,7 +391,7 @@ from domain.program_presets import PROGRAM_PRESETS, get_program_preset
 # ============================================================
 
 st.sidebar.title(
-    "🏋️ Personal Workout Trainer"
+    "🏋️ Fusion Akhada"
 )
 st.sidebar.caption(
     "Fitness guidance only—not medical advice. Consult a qualified professional "
@@ -516,7 +516,7 @@ if st.session_state.page == "Dashboard":
     if not profile:
 
         st.info(
-            "Welcome to your Personal Workout Trainer!"
+            "Welcome to Fusion Akhada!"
         )
 
         st.write(

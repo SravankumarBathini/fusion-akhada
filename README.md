@@ -1,9 +1,9 @@
-# Personal Workout Trainer
+# Fusion Akhada
 
 [![Live app](https://img.shields.io/badge/Live%20app-Streamlit-ff4b4b?logo=streamlit)](https://personal-workout-trainer.streamlit.app/)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab?logo=python)](https://www.python.org/)
 
-An AI-assisted workout planning and progress-tracking application that blends
+Fusion Akhada is an AI-assisted workout planning and progress-tracking application that blends
 traditional Indian training methods with modern Western strength,
 hypertrophy, and conditioning programming. Built with Streamlit, Google Gemini,
 and Supabase.

@@ -55,7 +55,7 @@ def ask_ai_coach(
     }
 
     system_prompt = """
-You are the AI coach inside a Personal Workout Trainer app.
+You are the AI coach inside the Fusion Akhada app.
 
 Your job is to provide practical, personalized fitness guidance
 based on the user's profile, workout plan, and workout history.

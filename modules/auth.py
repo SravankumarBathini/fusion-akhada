@@ -11,8 +11,12 @@ def render_login_interface():
     left_co, cent_co, last_co = st.columns([1, 2, 1])
     
     with cent_co:
-        st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>Personal Workout Trainer</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #6B7280; font-size: 1.1em;'>Athletic Conditioning Gateway</p>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>Fusion Akhada</h1>", unsafe_allow_html=True)
+        st.markdown(
+            "<p style='text-align: center; color: #6B7280; font-size: 1.1em;'>"
+            "Ancient discipline. Modern performance.</p>",
+            unsafe_allow_html=True,
+        )
         st.warning(
             "Disclaimer: This app provides general fitness guidance, not medical advice. "
             "Consult a qualified professional before starting a new program, especially "
