@@ -6,3 +6,7 @@ __pycache__/
 !.streamlit/secrets.toml.example
 data/profile.json
 data/*.json
+.vscode/
+.pytest_cache/
+.coverage
+*.log
