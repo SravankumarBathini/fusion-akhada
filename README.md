@@ -3,8 +3,10 @@
 [![Live app](https://img.shields.io/badge/Live%20app-Streamlit-ff4b4b?logo=streamlit)](https://personal-workout-trainer.streamlit.app/)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab?logo=python)](https://www.python.org/)
 
-An AI-assisted workout planning and progress-tracking application built with
-Streamlit, Google Gemini, and Supabase.
+An AI-assisted workout planning and progress-tracking application that blends
+traditional Indian training methods with modern Western strength,
+hypertrophy, and conditioning programming. Built with Streamlit, Google Gemini,
+and Supabase.
 
 > Build a plan, train consistently, and use your own performance data to guide
 > the next session.
@@ -14,6 +16,8 @@ Streamlit, Google Gemini, and Supabase.
 ## Features
 
 - Generates distinct split-aware weekly workout plans
+- Combines Akhada-inspired strength, Vyayam conditioning, and Western training
+  structures through Indian-Western program presets
 - Tracks completed workouts, volume, streaks, and strength trends
 - Adapts progression targets and equipment substitutions
 - Provides beginner-friendly exercise instructions and coaching cues
