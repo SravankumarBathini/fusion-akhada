@@ -38,32 +38,32 @@ Processes real-time workout logging inputs to display historical metrics includi
 ```text
 +-- data/                       # Local profile storage & fallback caches
 +-- config/
-¦   +-- settings.py             # Central application paths and integration names
-¦   +-- secrets.py              # Streamlit/.env/environment resolution
++   +-- settings.py             # Central application paths and integration names
++   +-- secrets.py              # Streamlit/.env/environment resolution
 +-- domain/
-¦   +-- workout_generation.py   # Pure exercise selection and plan generation
-¦   +-- workout_validation.py   # Pure plan validation/duplicate detection
-¦   +-- exercise_rules.py       # Pure exercise and history rules
-¦   +-- performance.py          # Pure exercise performance aggregation
-¦   +-- dashboard_metrics.py    # Pure dashboard calculations
++   +-- workout_generation.py   # Pure exercise selection and plan generation
++   +-- workout_validation.py   # Pure plan validation/duplicate detection
++   +-- exercise_rules.py       # Pure exercise and history rules
++   +-- performance.py          # Pure exercise performance aggregation
++   +-- dashboard_metrics.py    # Pure dashboard calculations
 +-- application/
-¦   +-- data_loader.py          # Cloud-first bootstrap with local fallback
-¦   +-- workout_plans.py        # Domain workout-plan use cases
++   +-- data_loader.py          # Cloud-first bootstrap with local fallback
++   +-- workout_plans.py        # Domain workout-plan use cases
 +-- infrastructure/
-¦   +-- json_repository.py      # Filesystem JSON persistence
-¦   +-- storage.py              # Supabase adapter
++   +-- json_repository.py      # Filesystem JSON persistence
++   +-- storage.py              # Supabase adapter
 +-- presentation/               # Streamlit presentation boundary
 +-- modules/
-¦   +-- ai_coach.py            # Fitness model engine routines
-¦   +-- analytics.py             # Backward-compatible analytics facade
-¦   +-- auth.py                # Multi-tenant validation gates
-¦   +-- workout_generator.py   # Backward-compatible AI generator facade
-¦   +-- workout_logger.py      # Real-time state logging panel
++   +-- ai_coach.py            # Fitness model engine routines
++   +-- analytics.py           # Backward-compatible analytics facade
++   +-- auth.py                # Multi-tenant validation gates
++   +-- workout_generator.py   # Backward-compatible AI generator facade
++   +-- workout_logger.py      # Real-time state logging panel
 +-- services/
-¦   +-- workout.py              # Backward-compatible pure generator facade
++   +-- workout.py              # Backward-compatible pure generator facade
 +-- utils/
-¦   +-- helpers.py              # Backward-compatible helper facade
-¦   +-- storage.py              # Backward-compatible storage facade
++   +-- helpers.py              # Backward-compatible helper facade
++   +-- storage.py              # Backward-compatible storage facade
 +-- app.py                      # Reactive entry point & page layout
 ```
 
@@ -92,6 +92,23 @@ New reusable logic should be added to the corresponding `domain`,
 
 3. **Install Dependencies & Execute:**
    ```bash
-   pip install streamlit supabase
+   pip install -r requirements.txt
    streamlit run app.py
    ```
+
+4. **Configure Supabase:**
+   - Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`.
+   - Add your Supabase URL, anon key, and Gemini API key.
+   - Run `database/001_add_profile_ownership.sql` in the Supabase SQL Editor.
+   - Confirm `profiles.user_id` exists before creating profiles.
+
+For Streamlit Community Cloud, add the same values under
+**App settings -> Secrets**. Never commit API keys or `.streamlit/secrets.toml`.
+
+## Validation
+
+Run the built-in regression tests before deployment:
+
+```bash
+python -m unittest discover -s tests -v
+```
