@@ -1,12 +1,21 @@
-﻿import modules.auth as auth
-from utils.storage import reset_user_progress_soft
-from utils.storage import reset_user_progress_soft
+import modules.auth as auth
+from infrastructure.storage import reset_user_progress_soft
 
 import json
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime
 
 import streamlit as st
+
+from application.data_loader import load_persistent_data as _load_persistent_data
+from config.settings import DATA_DIR
+from presentation.session_state import initialize_session_state
+
+# Streamlit page configuration must be the first Streamlit command.
+st.set_page_config(
+    page_title="Personal Workout Trainer",
+    page_icon="🏋️‍♂️",
+    layout="wide",
+)
 
 # ============================================================
 # MASTER PRODUCTION AKHADA SAFFRON THEME INJECTION
@@ -47,12 +56,15 @@ from modules.workout_generator import (
     normalize_workout_plan,
     generate_weekly_plan,
 )
+from domain.workout_validation import has_duplicate_exercises
 
-from modules.analytics import (
+from domain.exercise_rules import (
     get_completed_exercises_count,
     get_workouts_this_week,
     get_workouts_this_month,
-    get_exercise_performance,
+)
+from domain.performance import get_exercise_performance
+from modules.analytics import (
     calculate_exercise_summary,
     calculate_personal_records,
     get_progress_change,
@@ -67,7 +79,7 @@ from modules.workout_logger import (
     render_workout_logger,
 )
 
-from utils.storage import (
+from infrastructure.storage import (
     load_json,
     save_json,
     is_supabase_available,
@@ -85,11 +97,6 @@ from utils.storage import (
 # PAGE CONFIGURATION
 # ============================================================
 
-st.set_page_config(
-    page_title="Personal Workout Trainer",
-    page_icon="🏋️‍♂️",
-    layout="wide",
-)
 st.markdown("""
         <style>
             /* Dynamic Bodyweight UI Rule: When an input card possesses a zero placeholder value, fade the weight cell container visually */
@@ -116,9 +123,6 @@ if "user" not in st.session_state:
 # FILE PATHS
 # ============================================================
 
-BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
-
 PROFILE_FILE = DATA_DIR / "profile.json"
 WORKOUT_PLAN_FILE = DATA_DIR / "workout_plan.json"
 WORKOUT_HISTORY_FILE = DATA_DIR / "workout_history.json"
@@ -129,29 +133,7 @@ EXERCISES_FILE = DATA_DIR / "exercises.json"
 # SESSION STATE
 # ============================================================
 
-if "profile_created" not in st.session_state:
-    st.session_state.profile_created = False
-
-if "profile" not in st.session_state:
-    st.session_state.profile = {}
-
-if "workout_plan" not in st.session_state:
-    st.session_state.workout_plan = []
-
-if "workout_history" not in st.session_state:
-    st.session_state.workout_history = []
-
-if "page" not in st.session_state:
-    st.session_state.page = "Dashboard"
-
-if "cloud_data_loaded" not in st.session_state:
-    st.session_state.cloud_data_loaded = False
-
-if "profile_id" not in st.session_state:
-    st.session_state.profile_id = None
-
-if "storage_source" not in st.session_state:
-    st.session_state.storage_source = "local"
+initialize_session_state(st.session_state)
 
 
 # ============================================================
@@ -159,123 +141,20 @@ if "storage_source" not in st.session_state:
 # ============================================================
 
 def load_persistent_data():
-    """
-    Load application data.
-
-    Priority:
-
-    1. Supabase
-    2. Local JSON fallback
-
-    Exercises remain local because they are static reference data.
-    """
-
-    # --------------------------------------------------------
-    # CLOUD-FIRST REFERENCE DATA CATALOG
-    # --------------------------------------------------------
-    exercise_database = []
-    if is_supabase_available():
-        try:
-            from utils.storage import _get_supabase_client
-            client = _get_supabase_client()
-            if client is not None:
-                response = client.table("exercises").select("*").execute()
-                if response.data:
-                    exercise_database = response.data
-        except Exception:
-            pass
-            
-    # Fallback to local file if cloud repository is empty or unreachable
-    if not exercise_database:
-        exercise_database = load_json(
-            EXERCISES_FILE,
-            [],
-        )
-
-    # --------------------------------------------------------
-    # SUPABASE
-    # --------------------------------------------------------
-
-    if is_supabase_available():
-
-        try:
-
-            profile = load_latest_profile_from_supabase()
-
-            if profile:
-
-                profile_id = get_latest_profile_id()
-
-                workout_plan = []
-
-                if profile_id:
-
-                    cloud_plan = (
-                        load_latest_workout_plan_from_supabase(
-                            profile_id
-                        )
-                    )
-
-                    if cloud_plan:
-                        workout_plan = cloud_plan
-
-                # ------------------------------------------------
-                # WORKOUT HISTORY FROM SUPABASE
-                # ------------------------------------------------
-
-                workout_history = []
-
-                if profile_id:
-
-                    workout_history = (
-                        load_workout_history_from_supabase(
-                            profile_id
-                        )
-                    )
-
-                return (
-                    profile,
-                    workout_plan,
-                    workout_history,
-                    exercise_database,
-                    profile_id,
-                    "supabase",
-                )
-
-        except Exception as error:
-
-            st.warning(
-                "Supabase is configured, but cloud data could "
-                f"not be loaded. Using local data instead. "
-                f"Details: {error}"
-            )
-
-    # --------------------------------------------------------
-    # LOCAL FALLBACK
-    # --------------------------------------------------------
-
-    profile = load_json(
-        PROFILE_FILE,
-        {},
+    """Load cloud-first application data through the application use case."""
+    authenticated_user = st.session_state.get("user")
+    user_id = (
+        authenticated_user.get("id")
+        if isinstance(authenticated_user, dict)
+        else getattr(authenticated_user, "id", None)
     )
-
-    workout_plan = load_json(
-        WORKOUT_PLAN_FILE,
-        [],
-    )
-
-    workout_history = load_json(
-        WORKOUT_HISTORY_FILE,
-        [],
-    )
-
-    return (
-        profile,
-        workout_plan,
-        workout_history,
-        exercise_database,
-        None,
-        "local",
+    return _load_persistent_data(
+        profile_file=PROFILE_FILE,
+        workout_plan_file=WORKOUT_PLAN_FILE,
+        workout_history_file=WORKOUT_HISTORY_FILE,
+        exercises_file=EXERCISES_FILE,
+        user_id=user_id,
+        warning_callback=st.warning,
     )
 
 
@@ -283,78 +162,24 @@ def load_persistent_data():
 # ENFORCED DYNAMIC LIVE STORAGE SYNCHRONISATION 
 # ============================================================
 
-# Forcefully re-verify metrics whenever a user session is active to prevent morning data dropouts
-if True:
-    (
-        loaded_profile,
-        loaded_workout_plan,
-        loaded_workout_history,
-        exercise_database,
-        loaded_profile_id,
-        storage_source,
-    ) = load_persistent_data()
+(
+    loaded_profile,
+    loaded_workout_plan,
+    loaded_workout_history,
+    exercise_database,
+    loaded_profile_id,
+    storage_source,
+) = load_persistent_data()
 
-    if loaded_profile:
-        st.session_state.profile = loaded_profile
-        st.session_state.profile_created = True
-    if loaded_workout_plan:
-        st.session_state.workout_plan = loaded_workout_plan
-    if loaded_workout_history:
-        st.session_state.workout_history = loaded_workout_history
-    if loaded_profile_id:
-        st.session_state.profile_id = loaded_profile_id
-    if storage_source:
-        st.session_state.storage_source = storage_source
-
-if False:
-
-    (
-        loaded_profile,
-        loaded_workout_plan,
-        loaded_workout_history,
-        exercise_database,
-        loaded_profile_id,
-        storage_source,
-    ) = load_persistent_data()
-
-    st.session_state.profile = (
-        loaded_profile or {}
-    )
-
-    st.session_state.profile_created = bool(
-        loaded_profile
-    )
-
-    # Structural Metric Enforcement Layer: Secure live history count on initial data extraction
-    if loaded_workout_history:
-        st.session_state.total_workouts = len(loaded_workout_history)
-        st.session_state.current_streak = len(loaded_workout_history)
-
-    st.session_state.workout_plan = (
-        loaded_workout_plan or []
-    )
-
-    st.session_state.workout_history = (
-        loaded_workout_history or []
-    )
-
-    st.session_state.profile_id = (
-        loaded_profile_id
-    )
-
-    st.session_state.storage_source = (
-        storage_source
-    )
-
-    st.session_state.cloud_data_loaded = True
-
-else:
-
-    exercise_database = load_json(
-        EXERCISES_FILE,
-        [],
-    )
-
+if loaded_profile:
+    st.session_state.profile = loaded_profile
+    st.session_state.profile_created = True
+st.session_state.workout_plan = loaded_workout_plan or []
+st.session_state.workout_history = loaded_workout_history or []
+if loaded_profile_id:
+    st.session_state.profile_id = loaded_profile_id
+if storage_source:
+    st.session_state.storage_source = storage_source
 
 # ============================================================
 # NORMALIZE WORKOUT PLAN
@@ -364,356 +189,32 @@ st.session_state.workout_plan = normalize_workout_plan(
     st.session_state.workout_plan
 )
 
+if has_duplicate_exercises(st.session_state.workout_plan):
+    st.session_state.workout_plan = []
+    st.info(
+        "Your saved workout plan contained repeated exercises. "
+        "Generate a new weekly plan to apply the exercise-variation fix."
+    )
+
 
 # ============================================================
 # DASHBOARD HELPERS
 # ============================================================
-
-def safe_float(value, default=0.0):
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def safe_int(value, default=0):
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def get_workout_date(workout):
-    date_value = workout.get(
-        "date",
-        "",
-    )
-
-    if not date_value:
-        return None
-
-    try:
-
-        return datetime.strptime(
-            str(date_value),
-            "%Y-%m-%d",
-        ).date()
-
-    except (
-        TypeError,
-        ValueError,
-    ):
-        return None
-
-
-def calculate_total_volume(history):
-    total_volume = 0.0
-
-    for workout in history:
-
-        workout_volume = safe_float(
-            workout.get(
-                "total_volume",
-                0,
-            )
-        )
-
-        if workout_volume:
-
-            total_volume += workout_volume
-
-            continue
-
-        exercises = workout.get(
-            "exercises",
-            [],
-        )
-
-        for exercise in exercises:
-
-            sets = exercise.get(
-                "sets",
-                [],
-            )
-
-            for set_data in sets:
-
-                if not set_data.get(
-                    "completed",
-                    False,
-                ):
-                    continue
-
-                weight = safe_float(
-                    set_data.get(
-                        "weight_kg",
-                        0,
-                    )
-                )
-
-                reps = safe_int(
-                    set_data.get(
-                        "actual_reps",
-                        0,
-                    )
-                )
-
-                total_volume += (
-                    weight * reps
-                )
-
-    return total_volume
-
-
-def calculate_current_streak(history):
-    completed_dates = set()
-
-    for workout in history:
-
-        date_value = get_workout_date(
-            workout
-        )
-
-        if date_value:
-            completed_dates.add(
-                date_value
-            )
-
-    if not completed_dates:
-        return 0
-
-    today = datetime.now().date()
-
-    if today in completed_dates:
-
-        current_date = today
-
-    elif (
-        today - timedelta(days=1)
-        in completed_dates
-    ):
-
-        current_date = (
-            today - timedelta(days=1)
-        )
-
-    else:
-
-        return 0
-
-    streak = 0
-
-    while current_date in completed_dates:
-
-        streak += 1
-
-        current_date -= timedelta(
-            days=1
-        )
-
-    return streak
-
-
-def get_week_start():
-
-    today = datetime.now().date()
-
-    return today - timedelta(
-        days=today.weekday()
-    )
-
-
-def get_completed_workouts_this_week(
-    history
-):
-
-    week_start = get_week_start()
-
-    today = datetime.now().date()
-
-    count = 0
-
-    for workout in history:
-
-        date_value = get_workout_date(
-            workout
-        )
-
-        if (
-            date_value
-            and week_start
-            <= date_value
-            <= today
-        ):
-
-            count += 1
-
-    return count
-
-
-def get_next_workout(
-    workout_plan,
-    history,
-):
-
-    if not workout_plan:
-        return None
-
-    today = datetime.now().date()
-
-    weekday = today.weekday()
-
-    weekday_names = [
-        "Monday",
-        "Tuesday",
-        "Wednesday",
-        "Thursday",
-        "Friday",
-        "Saturday",
-        "Sunday",
-    ]
-
-    today_name = weekday_names[
-        weekday
-    ]
-
-    for workout in workout_plan:
-
-        day_of_week = str(
-            workout.get(
-                "day_of_week",
-                "",
-            )
-        ).strip()
-
-        if (
-            day_of_week.lower()
-            == today_name.lower()
-        ):
-
-            return workout
-
-    for workout in workout_plan:
-
-        day_value = workout.get(
-            "day"
-        )
-
-        if safe_int(
-            day_value,
-            -1,
-        ) == weekday + 1:
-
-            return workout
-
-    if workout_plan:
-
-        index = (
-            weekday
-            % len(workout_plan)
-        )
-
-        return workout_plan[index]
-
-    return None
-
-
-def get_recent_workouts(
-    history,
-    limit=3,
-):
-
-    valid_workouts = [
-        workout
-        for workout in history
-        if get_workout_date(workout)
-        is not None
-    ]
-
-    valid_workouts.sort(
-        key=lambda workout:
-        get_workout_date(workout),
-        reverse=True,
-    )
-
-    return valid_workouts[:limit]
-
-
-def get_best_strength_highlights(
-    history
-):
-
-    performance = (
-        get_exercise_performance(
-            history
-        )
-    )
-
-    highlights = []
-
-    for (
-        exercise_name,
-        entries,
-    ) in performance.items():
-
-        if not entries:
-            continue
-
-        best_entry = max(
-            entries,
-            key=lambda entry: (
-                safe_float(
-                    entry.get(
-                        "weight_kg",
-                        0,
-                    )
-                ),
-                safe_int(
-                    entry.get(
-                        "actual_reps",
-                        0,
-                    )
-                ),
-            ),
-        )
-
-        weight = safe_float(
-            best_entry.get(
-                "weight_kg",
-                0,
-            )
-        )
-
-        reps = safe_int(
-            best_entry.get(
-                "actual_reps",
-                0,
-            )
-        )
-
-        if weight > 0 and reps > 0:
-
-            highlights.append(
-                {
-                    "exercise": exercise_name,
-                    "weight": weight,
-                    "reps": reps,
-                    "date": best_entry.get(
-                        "date",
-                        "",
-                    ),
-                }
-            )
-
-    highlights.sort(
-        key=lambda item: (
-            item["weight"],
-            item["reps"],
-        ),
-        reverse=True,
-    )
-
-    return highlights[:5]
+# DASHBOARD HELPERS
+# ============================================================
+
+from domain.dashboard_metrics import (
+    calculate_current_streak,
+    calculate_total_volume,
+    get_best_strength_highlights,
+    get_completed_workouts_this_week,
+    get_next_workout,
+    get_recent_workouts,
+    get_week_start,
+    get_workout_date,
+    safe_float,
+    safe_int,
+)
 
 
 # ============================================================
@@ -943,9 +444,7 @@ if st.session_state.page == "Dashboard":
             workout_history,
         )
 
-        
-        if 'next_workout' not in locals() or next_workout is None: next_workout = {'day': 'Active Session', 'exercises': []}
-        if True:
+        if next_workout is not None:
 
             workout_name = (
                 next_workout.get(
@@ -1798,7 +1297,12 @@ elif st.session_state.page == "My Profile":
 
                 saved_row = (
                     save_profile_to_supabase(
-                        updated_profile
+                        updated_profile,
+                        user_id=(
+                            st.session_state.get("user", {}).get("id")
+                            if isinstance(st.session_state.get("user"), dict)
+                            else getattr(st.session_state.get("user"), "id", None)
+                        ),
                     )
                 )
 
@@ -1833,7 +1337,7 @@ elif st.session_state.page == "My Profile":
 
             st.session_state.profile_created = True
             st.session_state.cloud_data_loaded = True
-            st.toast("Profile memory updated successfully! ??")
+            st.toast("Profile memory updated successfully!")
 
             st.success(
                 "Profile saved successfully! ✅"
@@ -2797,7 +2301,7 @@ elif st.session_state.page == "Progress":
 
 elif st.session_state.page == "AI Coach":
 
-    st.title("?? AI Workout Coach")
+    st.title("AI Workout Coach")
 
     profile = st.session_state.get("profile", {})
     workout_plan = st.session_state.get("workout_plan", [])
@@ -2806,13 +2310,13 @@ elif st.session_state.page == "AI Coach":
     if not profile:
         st.warning("Please create your profile first.")
     else:
-        st.caption(f"?? Active Model Layer: {GEMINI_MODEL}")
+        st.caption(f"Active Model Layer: {GEMINI_MODEL}")
         st.write("---")
         
         # Initialize thread state data array memory
         if "chat_history" not in st.session_state:
             st.session_state.chat_history = [
-                {"role": "assistant", "content": f"Hello {profile.get('name', 'Athlete')}! ?? I have analyzed your workout splits and neck recovery limitations. Let\'s discuss scaling your exercises safely!"}
+                {"role": "assistant", "content": f"Hello {profile.get('name', 'Athlete')}! I have analyzed your workout splits and neck recovery limitations. Let\'s discuss scaling your exercises safely!"}
             ]
 
         # Render dialogue messages in chronological order inside native layout bubbles

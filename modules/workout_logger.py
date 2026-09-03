@@ -460,7 +460,7 @@ def render_workout_logger(
     import streamlit as st
     from utils.storage import load_json
     if not workout_plan:
-        st.info("?? No active plan synced yet. You can still log any exercise manually right now!")
+        st.info("No active plan synced yet. You can still log any exercise manually right now!")
         exercises_list = load_json("data/exercises.json", [])
         if exercises_list:
             ex_names = sorted(list({e.get("name") for e in exercises_list if e.get("name")}))

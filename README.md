@@ -37,16 +37,39 @@ Processes real-time workout logging inputs to display historical metrics includi
 
 ```text
 +-- data/                       # Local profile storage & fallback caches
++-- config/
+¦   +-- settings.py             # Central application paths and integration names
+¦   +-- secrets.py              # Streamlit/.env/environment resolution
++-- domain/
+¦   +-- workout_generation.py   # Pure exercise selection and plan generation
+¦   +-- workout_validation.py   # Pure plan validation/duplicate detection
+¦   +-- exercise_rules.py       # Pure exercise and history rules
+¦   +-- performance.py          # Pure exercise performance aggregation
+¦   +-- dashboard_metrics.py    # Pure dashboard calculations
++-- application/
+¦   +-- data_loader.py          # Cloud-first bootstrap with local fallback
+¦   +-- workout_plans.py        # Domain workout-plan use cases
++-- infrastructure/
+¦   +-- json_repository.py      # Filesystem JSON persistence
+¦   +-- storage.py              # Supabase adapter
++-- presentation/               # Streamlit presentation boundary
 +-- modules/
 ¦   +-- ai_coach.py            # Fitness model engine routines
-¦   +-- analytics.py           # Training metrics & performance formulas
+¦   +-- analytics.py             # Backward-compatible analytics facade
 ¦   +-- auth.py                # Multi-tenant validation gates
-¦   +-- workout_generator.py   # Exercise selection & structural logic
+¦   +-- workout_generator.py   # Backward-compatible AI generator facade
 ¦   +-- workout_logger.py      # Real-time state logging panel
++-- services/
+¦   +-- workout.py              # Backward-compatible pure generator facade
 +-- utils/
-¦   +-- storage.py             # Database handshake routines
+¦   +-- helpers.py              # Backward-compatible helper facade
+¦   +-- storage.py              # Backward-compatible storage facade
 +-- app.py                      # Reactive entry point & page layout
 ```
+
+The legacy `modules`, `services`, and `utils` import paths remain supported.
+New reusable logic should be added to the corresponding `domain`,
+`application`, `infrastructure`, or `config` package.
 
 ---
 

@@ -16,7 +16,7 @@ def ask_ai_coach(question: str, profile: dict, workout_plan: list, workout_histo
     api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
     
     if not api_key:
-        return "?? **AI Coach Offline:** Missing `GEMINI_API_KEY`. Please configure it in your environment or Streamlit Secrets dashboard to unlock your AI Coach."
+        return "**AI Coach Offline:** Missing `GEMINI_API_KEY`. Please configure it in your environment or Streamlit Secrets dashboard to unlock your AI Coach."
 
     client = genai.Client(api_key=api_key)
 
@@ -76,12 +76,12 @@ def ask_ai_coach(question: str, profile: dict, workout_plan: list, workout_histo
                 from utils.storage import DATA_DIR
                 save_json(DATA_DIR / "workout_plan.json", result["updated_workout_plan"])
                 
-            coach_reply += "\n\n?? *System Note: Your active 'My Workout' logging table has been updated dynamically!*"
+            coach_reply += "\n\n*System Note: Your active 'My Workout' logging table has been updated dynamically!*"
             
         return coach_reply
         
     except Exception as e:
-        return f"? **AI Coach Exception:** Failed to parse context or execute conversational overrides. Details: {str(e)}"
+        return f"**AI Coach Exception:** Failed to parse context or execute conversational overrides. Details: {str(e)}"
 
 def render_ai_coach_dashboard_ui(metrics, workout_name):
     import streamlit as st

@@ -1,0 +1,595 @@
+from domain.exercise_rules import (
+    normalize_text,
+    exercise_is_avoided,
+    exercise_is_preferred,
+)
+
+
+MUSCLE_AREAS = {
+    "Full Body": [
+        "Full Body",
+        "Chest",
+        "Back",
+        "Shoulders",
+        "Biceps",
+        "Triceps",
+        "Quadriceps",
+        "Hamstrings",
+        "Glutes",
+        "Legs",
+        "Core",
+    ],
+    "Upper Body": [
+        "Chest",
+        "Back",
+        "Shoulders",
+        "Biceps",
+        "Triceps",
+    ],
+    "Lower Body": [
+        "Quadriceps",
+        "Hamstrings",
+        "Glutes",
+        "Legs",
+    ],
+    "Chest & Triceps": [
+        "Chest",
+        "Triceps",
+    ],
+    "Back & Biceps": [
+        "Back",
+        "Biceps",
+    ],
+    "Legs": [
+        "Quadriceps",
+        "Hamstrings",
+        "Glutes",
+        "Legs",
+    ],
+    "Shoulders & Core": [
+        "Shoulders",
+        "Core",
+    ],
+    "Shoulders": [
+        "Shoulders",
+    ],
+    "Arms & Core": [
+        "Biceps",
+        "Triceps",
+        "Core",
+    ],
+}
+
+
+def get_training_split(days_per_week):
+    splits = {
+        1: ["Full Body"],
+        2: ["Full Body", "Full Body"],
+        3: [
+            "Full Body",
+            "Upper Body",
+            "Lower Body",
+        ],
+        4: [
+            "Upper Body",
+            "Lower Body",
+            "Upper Body",
+            "Lower Body",
+        ],
+        5: [
+            "Chest & Triceps",
+            "Back & Biceps",
+            "Legs",
+            "Shoulders & Core",
+            "Full Body",
+        ],
+        6: [
+            "Chest & Triceps",
+            "Back & Biceps",
+            "Legs",
+            "Shoulders",
+            "Arms & Core",
+            "Full Body",
+        ],
+        7: [
+            "Upper Body",
+            "Lower Body",
+            "Upper Body",
+            "Lower Body",
+            "Upper Body",
+            "Lower Body",
+            "Full Body",
+        ],
+    }
+
+    return splits.get(
+        days_per_week,
+        splits[3],
+    )
+
+
+def get_training_parameters(goal, style, level):
+    goal_text = str(goal).lower()
+    style_text = str(style).lower()
+    level_text = str(level).lower()
+
+    if (
+        "strength" in goal_text
+        or "strength" in style_text
+    ):
+        if level_text == "beginner":
+            return 3, "6-10", "90-120 sec"
+
+        if level_text == "intermediate":
+            return 4, "5-8", "120 sec"
+
+        return 4, "3-6", "150-180 sec"
+
+    if (
+        "muscle" in goal_text
+        or "hypertrophy" in style_text
+    ):
+        if level_text == "beginner":
+            return 2, "8-12", "60-90 sec"
+
+        if level_text == "intermediate":
+            return 3, "8-12", "60-90 sec"
+
+        return 4, "6-12", "90 sec"
+
+    if (
+        "fat" in goal_text
+        or "conditioning" in style_text
+    ):
+        return 3, "10-15", "30-60 sec"
+
+    if (
+        "endurance" in goal_text
+        or "cardio" in style_text
+    ):
+        return 2, "12-20", "30-60 sec"
+
+    return 3, "8-12", "60-90 sec"
+
+
+def get_exercise_count(duration):
+    duration = int(duration)
+
+    if duration <= 20:
+        return 3
+
+    if duration <= 40:
+        return 4
+
+    if duration <= 60:
+        return 5
+
+    return 6
+
+
+def filter_exercises(
+    profile,
+    target_areas,
+    exercise_database,
+):
+    equipment = profile.get(
+        "equipment",
+        [],
+    )
+
+    avoided_exercises = profile.get(
+        "exercises_to_avoid",
+        "",
+    )
+
+    if not isinstance(equipment, list):
+        equipment = [equipment]
+
+    available_equipment = {
+        normalize_text(item)
+        for item in equipment
+        if normalize_text(item)
+    }
+
+    filtered = []
+
+    for exercise in exercise_database:
+        if not isinstance(exercise, dict):
+            continue
+
+        if exercise_is_avoided(
+            exercise,
+            avoided_exercises,
+        ):
+            continue
+
+        exercise_equipment = normalize_text(
+            exercise.get(
+                "equipment",
+                "",
+            )
+        )
+
+        if (
+            available_equipment
+            and "no equipment" not in available_equipment
+            and exercise_equipment
+            and exercise_equipment not in available_equipment
+        ):
+            continue
+
+        primary_muscle = normalize_text(
+            exercise.get(
+                "primary_muscle",
+                "",
+            )
+        )
+
+        secondary_muscles = normalize_text(
+            exercise.get(
+                "secondary_muscles",
+                "",
+            )
+        )
+
+        target_match = False
+
+        for area in target_areas:
+            area_text = normalize_text(area)
+
+            if area_text in primary_muscle:
+                target_match = True
+                break
+
+            if area_text in secondary_muscles:
+                target_match = True
+                break
+
+        if target_match:
+            filtered.append(exercise)
+
+    return filtered
+
+
+def score_exercise(
+    exercise,
+    profile,
+    target_areas,
+    used_exercises,
+    used_patterns,
+):
+    score = 0
+
+    primary_muscle = normalize_text(
+        exercise.get(
+            "primary_muscle",
+            "",
+        )
+    )
+
+    movement_pattern = normalize_text(
+        exercise.get(
+            "movement_pattern",
+            "",
+        )
+    )
+
+    exercise_name = normalize_text(
+        exercise.get(
+            "name",
+            "",
+        )
+    )
+
+    preferred_exercises = profile.get(
+        "exercises_enjoy",
+        profile.get(
+            "preferred_exercises",
+            "",
+        ),
+    )
+
+    for area in target_areas:
+        area_text = normalize_text(area)
+
+        if area_text in primary_muscle:
+            score += 10
+
+    if exercise_is_preferred(
+        exercise,
+        preferred_exercises,
+    ):
+        score += 15
+
+    exercise_type = normalize_text(
+        exercise.get(
+            "exercise_type",
+            "",
+        )
+    )
+
+    if "compound" in exercise_type:
+        score += 5
+
+    if (
+        movement_pattern
+        and movement_pattern not in used_patterns
+    ):
+        score += 5
+
+    if exercise_name in used_exercises:
+        score -= 20
+
+    return score
+
+
+def select_exercises(
+    profile,
+    target_areas,
+    exercise_count,
+    used_exercises,
+    used_patterns,
+    exercise_database,
+):
+    candidates = filter_exercises(
+        profile,
+        target_areas,
+        exercise_database,
+    )
+
+    scored = []
+
+    for exercise in candidates:
+        score = score_exercise(
+            exercise,
+            profile,
+            target_areas,
+            used_exercises,
+            used_patterns,
+        )
+
+        scored.append(
+            (
+                score,
+                exercise,
+            )
+        )
+
+    scored.sort(
+        key=lambda item: item[0],
+        reverse=True,
+    )
+
+    selected = []
+
+    for _, exercise in scored:
+        exercise_name = normalize_text(
+            exercise.get(
+                "name",
+                "",
+            )
+        )
+
+        movement_pattern = normalize_text(
+            exercise.get(
+                "movement_pattern",
+                "",
+            )
+        )
+
+        if exercise_name in used_exercises:
+            continue
+
+        if (
+            movement_pattern
+            and movement_pattern in used_patterns
+        ):
+            continue
+
+        selected.append(exercise)
+
+        if exercise_name:
+            used_exercises.add(exercise_name)
+
+        if movement_pattern:
+            used_patterns.add(movement_pattern)
+
+        if len(selected) >= exercise_count:
+            break
+
+    if len(selected) < exercise_count:
+        for _, exercise in scored:
+            exercise_name = normalize_text(
+                exercise.get(
+                    "name",
+                    "",
+                )
+            )
+            movement_pattern = normalize_text(
+                exercise.get(
+                    "movement_pattern",
+                    "",
+                )
+            )
+
+            if (
+                exercise in selected
+                or exercise_name in used_exercises
+                or (
+                    movement_pattern
+                    and movement_pattern in used_patterns
+                )
+            ):
+                continue
+
+            selected.append(exercise)
+
+            if exercise_name:
+                used_exercises.add(exercise_name)
+
+            if movement_pattern:
+                used_patterns.add(movement_pattern)
+
+            if len(selected) >= exercise_count:
+                break
+
+    return selected
+
+
+def generate_workout_day(
+    profile,
+    day_number,
+    day_name,
+    used_exercises,
+    used_patterns,
+    exercise_database,
+):
+    duration = int(
+        profile.get(
+            "workout_duration",
+            45,
+        )
+    )
+
+    intensity = profile.get(
+        "workout_intensity",
+        "Moderate",
+    )
+
+    goal = profile.get(
+        "fitness_goal",
+        "Build muscle",
+    )
+
+    style = profile.get(
+        "workout_style",
+        "Mixed Training",
+    )
+
+    level = profile.get(
+        "fitness_level",
+        "Beginner",
+    )
+
+    sets, reps, rest = get_training_parameters(
+        goal,
+        style,
+        level,
+    )
+
+    exercise_count = get_exercise_count(
+        duration
+    )
+
+    target_areas = MUSCLE_AREAS.get(
+        day_name,
+        ["Full Body"],
+    )
+
+    selected_exercises = select_exercises(
+        profile,
+        target_areas,
+        exercise_count,
+        used_exercises,
+        used_patterns,
+        exercise_database,
+    )
+
+    exercises = []
+
+    for exercise in selected_exercises:
+        exercise_data = {
+            "name": exercise.get(
+                "name",
+                "Exercise",
+            ),
+            "equipment": exercise.get(
+                "equipment",
+                "No equipment",
+            ),
+            "sets": sets,
+            "reps": reps,
+            "rest": rest,
+            "type": exercise.get(
+                "exercise_type",
+                "Strength",
+            ),
+            "exercise_type": exercise.get(
+                "exercise_type",
+                "Strength",
+            ),
+            "primary_muscle": exercise.get(
+                "primary_muscle",
+                "",
+            ),
+            "secondary_muscles": exercise.get(
+                "secondary_muscles",
+                [],
+            ),
+            "movement_pattern": exercise.get(
+                "movement_pattern",
+                "",
+            ),
+            "difficulty": exercise.get(
+                "difficulty",
+                level,
+            ),
+            "instructions": exercise.get(
+                "instructions",
+                "",
+            ),
+        }
+
+        exercises.append(exercise_data)
+
+    return {
+        "day": day_number,
+        "name": day_name,
+        "duration": duration,
+        "intensity": intensity,
+        "warmup": "5-10 minutes",
+        "cooldown": "5 minutes",
+        "exercises": exercises,
+    }
+
+
+def generate_weekly_plan(
+    profile,
+    exercise_database,
+):
+    days_per_week = int(
+        profile.get(
+            "days_per_week",
+            3,
+        )
+    )
+
+    split = get_training_split(
+        days_per_week
+    )
+
+    used_exercises = set()
+    used_patterns = set()
+
+    weekly_plan = []
+
+    for day_number, day_name in enumerate(
+        split,
+        start=1,
+    ):
+        workout_day = generate_workout_day(
+            profile,
+            day_number,
+            day_name,
+            used_exercises,
+            used_patterns,
+            exercise_database,
+        )
+
+        weekly_plan.append(
+            workout_day
+        )
+
+    return weekly_plan
+
+
