@@ -1,10 +1,14 @@
 import json
+import logging
+import time
 import streamlit as st
 from google import genai
 from google.genai import types
 import os
 
 from domain.workout_validation import has_duplicate_exercises
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_workout_plan(plan):
@@ -46,7 +50,7 @@ def generate_weekly_plan(_profile, exercise_database=None):
     if not api_key:
         return []
 
-    client = genai.Client(api_key=api_key)
+    client = _get_gemini_client(api_key)
     
     prompt = f"""
     You are an elite master strength coach specializing in Hybrid Functional Training. Your unique expertise seamlessly blends modern Western hypertrophy/strength concepts with traditional Indian physical culture (Vyayam training patterns from ancient Akhadas).
@@ -100,12 +104,18 @@ def generate_weekly_plan(_profile, exercise_database=None):
     """
 
     try:
+        started_at = time.perf_counter()
         response = client.models.generate_content(
             model="gemini-3.6-flash",
             contents=prompt,
             config=types.GenerateContentConfig(
-                response_mime_type="application/json"
+                response_mime_type="application/json",
+                max_output_tokens=3000,
             )
+        )
+        logger.info(
+            "Workout plan generation completed in %.2fs",
+            time.perf_counter() - started_at,
         )
         generated_plan = json.loads(response.text)
         exercise_names = set()
@@ -219,3 +229,9 @@ def generate_weekly_plan(_profile, exercise_database=None):
                 "exercises": fallback_exercises[exercise_key]
             })
         return weekly_plan
+
+
+@st.cache_resource(show_spinner=False)
+def _get_gemini_client(api_key):
+    """Reuse the Gemini client across Streamlit reruns."""
+    return genai.Client(api_key=api_key)

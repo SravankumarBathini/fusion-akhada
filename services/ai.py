@@ -1,4 +1,6 @@
 import json
+import logging
+import time
 
 from google import genai
 from google.genai import types
@@ -7,8 +9,10 @@ import streamlit as st
 
 
 GEMINI_MODEL = "gemini-3.6-flash"
+logger = logging.getLogger(__name__)
 
 
+@st.cache_resource(show_spinner=False)
 def get_gemini_client():
     """
     Create the Gemini API client using the API key
@@ -49,9 +53,7 @@ def ask_ai_coach(
     context = {
         "profile": profile,
         "workout_plan": workout_plan,
-        "recent_workout_history": (
-            workout_history[-10:]
-        ),
+        "recent_workout_history": workout_history[-5:],
     }
 
     system_prompt = """
@@ -82,11 +84,7 @@ Important rules:
     user_prompt = f"""
 Here is the user's current training information:
 
-{json.dumps(
-    context,
-    indent=2,
-    ensure_ascii=False,
-)}
+{json.dumps(context, separators=(",", ":"), ensure_ascii=False)}
 
 User's question:
 
@@ -95,6 +93,7 @@ User's question:
 
     client = get_gemini_client()
 
+    started_at = time.perf_counter()
     response = client.models.generate_content(
         model=GEMINI_MODEL,
         contents=user_prompt,
@@ -111,4 +110,8 @@ User's question:
             "Gemini returned an empty response."
         )
 
+    logger.info(
+        "AI coach response completed in %.2fs",
+        time.perf_counter() - started_at,
+    )
     return answer.strip()
