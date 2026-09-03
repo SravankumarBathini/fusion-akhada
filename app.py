@@ -280,10 +280,33 @@ def load_persistent_data():
 
 
 # ============================================================
-# LOAD DATA ONCE PER SESSION
+# ENFORCED DYNAMIC LIVE STORAGE SYNCHRONISATION 
 # ============================================================
 
-if not st.session_state.cloud_data_loaded:
+# Forcefully re-verify metrics whenever a user session is active to prevent morning data dropouts
+if True:
+    (
+        loaded_profile,
+        loaded_workout_plan,
+        loaded_workout_history,
+        exercise_database,
+        loaded_profile_id,
+        storage_source,
+    ) = load_persistent_data()
+
+    if loaded_profile:
+        st.session_state.profile = loaded_profile
+        st.session_state.profile_created = True
+    if loaded_workout_plan:
+        st.session_state.workout_plan = loaded_workout_plan
+    if loaded_workout_history:
+        st.session_state.workout_history = loaded_workout_history
+    if loaded_profile_id:
+        st.session_state.profile_id = loaded_profile_id
+    if storage_source:
+        st.session_state.storage_source = storage_source
+
+if False:
 
     (
         loaded_profile,
