@@ -44,6 +44,28 @@ def exercise_is_preferred(exercise, preferred_exercises):
     return exercise_name in preferred_text
 
 
+def get_exercise_instruction(exercise):
+    """Return coach guidance even when a generated plan omits instructions."""
+    instructions = str(exercise.get("instructions", "")).strip()
+    if instructions:
+        return instructions
+
+    pattern = normalize_text(exercise.get("movement_pattern", ""))
+    guidance = {
+        "squat": "Keep your chest tall, brace your core, and lower under control. Drive through your whole foot to stand.",
+        "lunge": "Step into a stable stance, lower with control, and keep the front knee tracking over the toes.",
+        "horizontal push": "Brace your core, keep your shoulders packed, and press smoothly without flaring your elbows.",
+        "vertical push": "Keep your ribs down, brace your core, and press through a controlled range without shrugging.",
+        "horizontal pull": "Keep a neutral spine, pull your elbows toward your ribs, and pause when your shoulder blades come together.",
+        "vertical pull": "Start with your shoulders down, pull your elbows toward your sides, and lower slowly.",
+        "hip hinge": "Push your hips back with a neutral spine, keep the load close, and squeeze your glutes to stand.",
+    }
+    return guidance.get(
+        pattern,
+        "Move slowly and with control. Keep your spine neutral, breathe steadily, and stop if you feel sharp pain.",
+    )
+
+
 def parse_history_datetime(workout):
     date_text = str(
         workout.get(

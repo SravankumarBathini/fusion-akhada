@@ -105,6 +105,61 @@ st.markdown("""
         box-shadow: 0 8px 18px rgba(255, 107, 0, 0.18);
     }
 
+    .premium-hero {
+        position: relative;
+        overflow: hidden;
+        margin: 0.5rem 0 1.75rem;
+        padding: 2rem 2.25rem;
+        border: 1px solid rgba(255, 138, 61, 0.28);
+        border-radius: 24px;
+        background:
+            linear-gradient(115deg, rgba(255, 107, 0, 0.2), transparent 42%),
+            linear-gradient(135deg, #202a3d, #151b29);
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2);
+    }
+
+    .premium-hero::after {
+        content: "";
+        position: absolute;
+        width: 240px;
+        height: 240px;
+        right: -70px;
+        top: -100px;
+        border-radius: 50%;
+        background: rgba(255, 138, 61, 0.14);
+        filter: blur(4px);
+    }
+
+    .hero-eyebrow {
+        position: relative;
+        z-index: 1;
+        margin-bottom: 0.5rem;
+        color: #ffc078 !important;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+    }
+
+    .hero-title {
+        position: relative;
+        z-index: 1;
+        margin: 0;
+        color: #ffffff !important;
+        font-size: clamp(1.8rem, 4vw, 3rem);
+        font-weight: 800;
+        letter-spacing: -0.04em;
+    }
+
+    .hero-copy {
+        position: relative;
+        z-index: 1;
+        max-width: 680px;
+        margin: 0.7rem 0 0;
+        color: #cbd5e1 !important;
+        font-size: 1rem;
+    }
+
     div[data-testid="stProgress"] > div > div {
         background: linear-gradient(90deg, #ff6b00, #ffc078) !important;
     }
@@ -137,6 +192,7 @@ from domain.workout_validation import has_duplicate_exercises
 
 from domain.exercise_rules import (
     get_completed_exercises_count,
+    get_exercise_instruction,
     get_workouts_this_week,
     get_workouts_this_month,
 )
@@ -464,13 +520,21 @@ if st.session_state.page == "Dashboard":
             "Beginner",
         )
 
-        st.subheader(
-            f"Welcome back, {name}! 👋"
+        st.markdown(
+            f"""
+            <section class="premium-hero">
+                <div class="hero-eyebrow">PERSONAL TRAINING COMMAND CENTER</div>
+                <h1 class="hero-title">Welcome back, {name}! 👋</h1>
+                <p class="hero-copy">
+                    Your next best session is ready. Stay consistent, train with intent,
+                    and build momentum one workout at a time.
+                </p>
+            </section>
+            """,
+            unsafe_allow_html=True,
         )
-
         st.caption(
-            f"Goal: **{fitness_goal}** • "
-            f"Level: **{fitness_level}**"
+            f"Current focus: **{fitness_goal}**  ·  Training level: **{fitness_level}**"
         )
 
         st.divider()
@@ -1672,22 +1736,11 @@ elif st.session_state.page == "My Workout":
                         f"{exercise.get('movement_pattern', '-')}"
                     )
 
-                    instructions = (
-                        exercise.get(
-                            "instructions",
-                            "",
+                    with st.expander("📖 How to perform this exercise"):
+                        st.write(get_exercise_instruction(exercise))
+                        st.caption(
+                            "Use a controlled range of motion and stop if you feel sharp pain."
                         )
-                    )
-
-                    if instructions:
-
-                        with st.expander(
-                            "How to perform"
-                        ):
-
-                            st.write(
-                                instructions
-                            )
 
                 st.write(
                     f"🧘 **Cooldown:** "

@@ -7,6 +7,7 @@ import streamlit as st
 
 from domain.performance import get_progression_target
 from domain.exercise_substitution import get_exercise_substitutions
+from domain.exercise_rules import get_exercise_instruction
 
 
 # ============================================================
@@ -718,6 +719,10 @@ def render_workout_logger(
             f"({completed_sets}/{planned_sets} sets)",
             expanded=True,
         ):
+            st.caption(
+                f"📖 **How to perform:** {get_exercise_instruction(exercise)}"
+            )
+
             substitutions = get_exercise_substitutions(
                 exercise,
                 profile,

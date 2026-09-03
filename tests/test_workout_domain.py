@@ -2,6 +2,7 @@ import unittest
 
 from domain.dashboard_metrics import get_weekly_progress
 from domain.exercise_substitution import get_exercise_substitutions
+from domain.exercise_rules import get_exercise_instruction
 from domain.performance import get_progression_target
 from domain.program_presets import PROGRAM_PRESETS, get_program_preset
 from domain.workout_validation import has_duplicate_exercises
@@ -45,6 +46,13 @@ class WorkoutDomainTests(unittest.TestCase):
         progress = get_weekly_progress([])
         self.assertEqual(len(progress), 8)
         self.assertTrue(all(item["Workouts"] == 0 for item in progress))
+
+    def test_missing_instructions_get_safe_movement_guidance(self):
+        guidance = get_exercise_instruction(
+            {"name": "Squat", "movement_pattern": "Squat"}
+        )
+        self.assertIn("chest tall", guidance)
+
 
 
 if __name__ == "__main__":
