@@ -12,7 +12,7 @@ DEFAULT_SESSION_STATE: dict[str, Any] = {
     "page": "Dashboard",
     "cloud_data_loaded": False,
     "profile_id": None,
-    "storage_source": "local",
+    "storage_source": "unavailable",
 }
 
 

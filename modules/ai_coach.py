@@ -67,14 +67,18 @@ def ask_ai_coach(question: str, profile: dict, workout_plan: list, workout_histo
             st.session_state.workout_plan = result["updated_workout_plan"]
             
             # Persist changes dynamically based on the current storage source
-            from utils.storage import is_supabase_available, save_workout_plan_to_supabase, save_json
+            from utils.storage import save_workout_plan_to_supabase
             profile_id = st.session_state.get("profile_id")
             
-            if profile_id and is_supabase_available() and st.session_state.get("storage_source") == "supabase":
-                save_workout_plan_to_supabase(profile_id, result["updated_workout_plan"])
-            else:
-                from utils.storage import DATA_DIR
-                save_json(DATA_DIR / "workout_plan.json", result["updated_workout_plan"])
+            if not profile_id or st.session_state.get("storage_source") != "supabase":
+                raise RuntimeError("Supabase is required to update the workout plan.")
+
+            saved_plan = save_workout_plan_to_supabase(
+                profile_id,
+                result["updated_workout_plan"],
+            )
+            if not saved_plan:
+                raise RuntimeError("Supabase did not save the updated workout plan.")
                 
             coach_reply += "\n\n*System Note: Your active 'My Workout' logging table has been updated dynamically!*"
             

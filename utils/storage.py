@@ -19,6 +19,7 @@ from infrastructure.storage import (
     reset_user_progress_soft,
     save_json,
     save_profile_to_supabase,
+    supabase_schema_ready,
     save_workout_history_to_supabase,
     save_workout_plan_to_supabase,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "reset_user_progress_soft",
     "save_json",
     "save_profile_to_supabase",
+    "supabase_schema_ready",
     "save_workout_history_to_supabase",
     "save_workout_plan_to_supabase",
 ]

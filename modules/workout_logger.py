@@ -363,15 +363,8 @@ def _save_completed_workout(
 
     Supabase is the primary persistent storage when enabled.
 
-    Local JSON is used only when:
-    - Supabase is disabled
-    - Supabase configuration is unavailable
-    - Supabase save fails
-    - Supabase does not return a successfully inserted row
-
     Returns:
         "supabase" when Supabase save succeeds.
-        "local" when local JSON fallback is used.
     """
 
     # ========================================================
@@ -405,39 +398,15 @@ def _save_completed_workout(
 
         except Exception as error:
 
-            st.warning(
-                "Workout could not be saved to Supabase. "
-                "A local backup will be used instead."
+            st.error(
+                "Workout could not be saved to Supabase."
             )
+            st.caption(f"Supabase save error: {error}")
+            raise
 
-            st.caption(
-                f"Supabase save error: {error}"
-            )
-
-    # ========================================================
-    # LOCAL JSON FALLBACK
-    # ========================================================
-
-    history = _load_history(
-        history_file
+    raise RuntimeError(
+        "Supabase storage is required to save completed workouts."
     )
-
-    history.append(
-        completed_workout
-    )
-
-    local_saved = _save_history(
-        history_file,
-        history,
-        save_json_function,
-    )
-
-    if not local_saved:
-        st.error(
-            "The workout could not be saved locally either."
-        )
-
-    return "local"
 
 
 # ============================================================
@@ -1097,17 +1066,9 @@ def render_workout_logger(
             # SUCCESS MESSAGE
             # ------------------------------------------------
 
-            if storage_used == "supabase":
-
-                st.success(
-                    "🎉 Workout completed and saved to Supabase!"
-                )
-
-            else:
-
-                st.success(
-                    "🎉 Workout completed and saved locally!"
-                )
+            st.success(
+                "🎉 Workout completed and saved to Supabase!"
+            )
 
             st.balloons()
 
@@ -1153,21 +1114,10 @@ def render_workout_logger(
                     ),
                 )
 
-            if storage_used == "supabase":
-
-                st.info(
-                    "Your workout has been saved to "
-                    "Supabase and will be available to "
-                    "Workout History, Progress, and AI Coach."
-                )
-
-            else:
-
-                st.info(
-                    "Your workout has been saved locally. "
-                    "It will be available to Workout History, "
-                    "Progress, and AI Coach."
-                )
+            st.info(
+                "Your workout has been saved to Supabase and will be "
+                "available to Workout History, Progress, and AI Coach."
+            )
 
             st.rerun()
 

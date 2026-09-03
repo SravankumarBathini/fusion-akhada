@@ -158,6 +158,17 @@ def load_persistent_data():
     )
 
 
+def save_cloud_workout_plan(plan):
+    """Persist a plan in Supabase and fail loudly when it is unavailable."""
+    profile_id = st.session_state.get("profile_id")
+    if not profile_id:
+        raise RuntimeError("An active Supabase profile is required.")
+
+    saved_row = save_workout_plan_to_supabase(profile_id, plan)
+    if not saved_row:
+        raise RuntimeError("Supabase did not return the saved workout plan.")
+
+
 # ============================================================
 # ENFORCED DYNAMIC LIVE STORAGE SYNCHRONISATION 
 # ============================================================
@@ -180,6 +191,16 @@ if loaded_profile_id:
     st.session_state.profile_id = loaded_profile_id
 if storage_source:
     st.session_state.storage_source = storage_source
+
+if storage_source != "supabase":
+    st.error(
+        "Supabase is required to use this application. "
+        "Configure SUPABASE_URL and SUPABASE_KEY in Streamlit Secrets. "
+        "If credentials are configured, run "
+        "database/001_add_profile_ownership.sql in the Supabase SQL Editor, "
+        "then reload the page."
+    )
+    st.stop()
 
 # ============================================================
 # NORMALIZE WORKOUT PLAN
@@ -272,10 +293,7 @@ if (
     )
 
 else:
-
-    st.sidebar.info(
-        "💾 Storage: Local JSON"
-    )
+    st.sidebar.error("Supabase storage is unavailable")
 
 
 
@@ -553,22 +571,7 @@ if st.session_state.page == "Dashboard":
                     st.session_state.profile_id
                 )
 
-                if (
-                    profile_id
-                    and is_supabase_available()
-                ):
-
-                    save_workout_plan_to_supabase(
-                        profile_id,
-                        new_plan,
-                    )
-
-                else:
-
-                    save_json(
-                        WORKOUT_PLAN_FILE,
-                        new_plan,
-                    )
+                save_cloud_workout_plan(new_plan)
 
                 st.success(
                     "Your personalized workout plan "
@@ -1321,14 +1324,8 @@ elif st.session_state.page == "My Profile":
                 )
 
             else:
-
-                save_json(
-                    PROFILE_FILE,
-                    updated_profile,
-                )
-
-                st.session_state.storage_source = (
-                    "local"
+                raise RuntimeError(
+                    "Supabase is required before saving a profile."
                 )
 
             st.session_state.profile = (
@@ -1404,22 +1401,7 @@ elif st.session_state.page == "My Workout":
 
             try:
 
-                if (
-                    profile_id
-                    and is_supabase_available()
-                ):
-
-                    save_workout_plan_to_supabase(
-                        profile_id,
-                        new_plan,
-                    )
-
-                else:
-
-                    save_json(
-                        WORKOUT_PLAN_FILE,
-                        new_plan,
-                    )
+                save_cloud_workout_plan(new_plan)
 
                 st.success(
                     "Workout plan generated!"
@@ -1604,22 +1586,7 @@ elif st.session_state.page == "My Workout":
 
             try:
 
-                if (
-                    profile_id
-                    and is_supabase_available()
-                ):
-
-                    save_workout_plan_to_supabase(
-                        profile_id,
-                        new_plan,
-                    )
-
-                else:
-
-                    save_json(
-                        WORKOUT_PLAN_FILE,
-                        new_plan,
-                    )
+                save_cloud_workout_plan(new_plan)
 
                 st.success(
                     "A new personalized weekly plan "

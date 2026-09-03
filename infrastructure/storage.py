@@ -4,12 +4,12 @@ from typing import Any
 
 try:
     import streamlit as st
-except ImportError:  # Local JSON usage does not require Streamlit.
+except ImportError:  # Storage adapters can be imported outside Streamlit.
     st = None
 
 try:
     from supabase import Client, create_client
-except ImportError:  # Supabase is optional when using local persistence.
+except ImportError:
     Client = Any
     create_client = None
 
@@ -74,6 +74,21 @@ def is_supabase_available() -> bool:
     return _get_supabase_client() is not None
 
 
+def _profiles_support_user_id(client: Client) -> bool:
+    """Detect whether the deployed profiles schema has tenant ownership."""
+    try:
+        client.table("profiles").select("user_id").limit(1).execute()
+    except Exception:
+        return False
+    return True
+
+
+def supabase_schema_ready() -> bool:
+    """Return whether the deployed profile schema supports tenant isolation."""
+    client = _get_supabase_client()
+    return client is not None and _profiles_support_user_id(client)
+
+
 # ============================================================
 # LOCAL JSON STORAGE
 # ============================================================
@@ -103,8 +118,8 @@ def save_profile_to_supabase(
     inside profile_data JSONB.
 
     Returns the inserted row on success.
-    Returns None when Supabase is unavailable or the insert
-    does not return a row.
+    Returns None when Supabase is unavailable or the insert does not
+    return a row. Raises when authentication or tenant-safe schema is missing.
     """
 
     client = _get_supabase_client()
@@ -113,7 +128,6 @@ def save_profile_to_supabase(
         return None
 
     row = {
-        "user_id": user_id,
         "name": profile.get("name"),
         "age": profile.get("age"),
         "gender": profile.get("gender"),
@@ -137,6 +151,14 @@ def save_profile_to_supabase(
         "exercises_to_avoid": profile.get("exercises_to_avoid"),
         "profile_data": profile,
     }
+    if not user_id:
+        raise RuntimeError("An authenticated Supabase user is required.")
+    if not _profiles_support_user_id(client):
+        raise RuntimeError(
+            "Supabase schema is missing profiles.user_id. "
+            "Run database/001_add_profile_ownership.sql."
+        )
+    row["user_id"] = user_id
 
     try:
 
@@ -147,9 +169,10 @@ def save_profile_to_supabase(
             .execute()
         )
 
-    except Exception:
-
-        return None
+    except Exception as error:
+        raise RuntimeError(
+            f"Supabase profile save failed: {error}"
+        ) from error
 
     if (
         response
@@ -179,9 +202,9 @@ def load_latest_profile_from_supabase(
 
     try:
 
-        query = client.table("profiles").select("*")
-        if user_id:
-            query = query.eq("user_id", user_id)
+        if not user_id or not _profiles_support_user_id(client):
+            return None
+        query = client.table("profiles").select("*").eq("user_id", user_id)
         response = query.order("created_at", desc=True).limit(1).execute()
 
     except Exception:
@@ -358,32 +381,12 @@ def save_workout_history_to_supabase(
     workout: dict[str, Any],
 ) -> dict[str, Any] | None:
     """
-    Save one completed workout to Supabase with automatic local write-ahead failover.
-    Guarantees workout data is never dropped if the local internet network flickers.
-
-    Returns the inserted Supabase row, or a local-only marker when cloud
-    synchronization is unavailable after the local write succeeds.
+    Save one completed workout to Supabase.
     """
     
-    # 1. ALWAYS execute an immediate backup to local storage first
-    history_file = DATA_DIR / "workout_history.json"
-    local_history = load_json(history_file, [])
-    if not isinstance(local_history, list):
-        local_history = []
-    
-    # Avoid duplicating identical entries if a user retries a save
-    if not any(item.get("id") == workout.get("id") and item.get("date") == workout.get("date") for item in local_history):
-        local_history.append(workout)
-        save_json(history_file, local_history)
-
-    # 2. Proceed with cloud synchronization
     client = _get_supabase_client()
     if client is None:
-        _sidebar_message(
-            "warning",
-            "Network offline. Workout saved locally to device storage safely.",
-        )
-        return {"workout_data": workout} # Return a mock row format to maintain dashboard continuity
+        return None
 
     row = {
         "profile_id": profile_id,
@@ -449,12 +452,8 @@ def save_workout_history_to_supabase(
             .execute()
         )
         return response.data[0] if response and response.data else {"workout_data": workout}
-    except Exception as e:
-        _sidebar_message(
-            "warning",
-            "Cloud sync failed due to a connection dropout. Saved locally!",
-        )
-        return {"workout_data": workout}
+    except Exception:
+        return None
 
 
 def load_workout_history_from_supabase(
@@ -532,9 +531,9 @@ def get_latest_profile_id(user_id: str | None = None) -> str | None:
 
     try:
 
-        query = client.table("profiles").select("id")
-        if user_id:
-            query = query.eq("user_id", user_id)
+        if not user_id or not _profiles_support_user_id(client):
+            return None
+        query = client.table("profiles").select("id").eq("user_id", user_id)
         response = query.order("created_at", desc=True).limit(1).execute()
 
     except Exception:
@@ -552,33 +551,27 @@ def get_latest_profile_id(user_id: str | None = None) -> str | None:
 # ============================================================
 
 def reset_user_progress_soft() -> bool:
-    local_files = ["workout_plan.json", "workout_history.json"]
-    for f in local_files:
-        path = DATA_DIR / f
-        if path.exists():
-            try:
-                path.unlink()
-            except OSError:
-                pass
-                
     client = _get_supabase_client()
-    if client is not None:
-        try:
-            profile_id = st.session_state.get("profile_id")
-            if not profile_id:
-                _sidebar_message("error", "Cloud reset requires an active profile.")
-                return False
+    if client is None:
+        _sidebar_message("error", "Supabase storage is unavailable.")
+        return False
 
-            client.table("workout_history").delete().eq(
-                "profile_id",
-                profile_id,
-            ).execute()
-            client.table("workout_plans").delete().eq(
-                "profile_id",
-                profile_id,
-            ).execute()
-        except Exception as e:
-            _sidebar_message("error", f"Cloud reset error: {str(e)}")
+    try:
+        profile_id = st.session_state.get("profile_id")
+        if not profile_id:
+            _sidebar_message("error", "Cloud reset requires an active profile.")
             return False
-            
+
+        client.table("workout_history").delete().eq(
+            "profile_id",
+            profile_id,
+        ).execute()
+        client.table("workout_plans").delete().eq(
+            "profile_id",
+            profile_id,
+        ).execute()
+    except Exception as e:
+        _sidebar_message("error", f"Cloud reset error: {str(e)}")
+        return False
+
     return True
