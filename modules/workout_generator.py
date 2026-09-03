@@ -23,6 +23,7 @@ def generate_weekly_plan(_profile, exercise_database=None):
     api_key = _get_api_key()
     days_per_week = int(_profile.get("days_per_week", 3))
     workout_style = _profile.get("workout_style", "Mixed Training")
+    program_preset = _profile.get("program_preset", "Custom")
     fitness_goal = _profile.get("fitness_goal", "General Fitness")
     fitness_level = _profile.get("fitness_level", "Beginner")
     duration = _profile.get("workout_duration", 45)
@@ -51,6 +52,7 @@ def generate_weekly_plan(_profile, exercise_database=None):
     You are an elite master strength coach specializing in Hybrid Functional Training. Your unique expertise seamlessly blends modern Western hypertrophy/strength concepts with traditional Indian physical culture (Vyayam training patterns from ancient Akhadas).
     
     Days per week: {days_per_week} days
+    Program Preset: {program_preset}
     Workout Style: {workout_style} (Hybrid Western & Indian Traditional)
     Fitness Goal: {fitness_goal}
     Target Split Routine: {target_split}

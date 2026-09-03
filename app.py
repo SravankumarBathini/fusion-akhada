@@ -231,11 +231,13 @@ from domain.dashboard_metrics import (
     get_completed_workouts_this_week,
     get_next_workout,
     get_recent_workouts,
+    get_weekly_progress,
     get_week_start,
     get_workout_date,
     safe_float,
     safe_int,
 )
+from domain.program_presets import PROGRAM_PRESETS, get_program_preset
 
 
 # ============================================================
@@ -666,6 +668,43 @@ if st.session_state.page == "Dashboard":
             )
 
         st.divider()
+        st.subheader("📈 Training Momentum")
+        weekly_progress = get_weekly_progress(workout_history)
+        if any(item["Workouts"] for item in weekly_progress):
+            chart_col, insight_col = st.columns([2, 1])
+            with chart_col:
+                st.caption("Your eight-week training volume trend")
+                st.line_chart(
+                    weekly_progress,
+                    x="Week",
+                    y="Volume (kg)",
+                    height=240,
+                )
+            with insight_col:
+                best_week = max(
+                    weekly_progress,
+                    key=lambda item: item["Volume (kg)"],
+                )
+                average_workouts = sum(
+                    item["Workouts"] for item in weekly_progress
+                ) / len(weekly_progress)
+                with st.container(border=True):
+                    st.caption("COACH'S READ")
+                    st.metric(
+                        "Best volume week",
+                        f"{best_week['Volume (kg)']:,.0f} kg",
+                        best_week["Week"],
+                    )
+                    st.metric(
+                        "Weekly average",
+                        f"{average_workouts:.1f} sessions",
+                    )
+        else:
+            st.info(
+                "Your momentum chart will appear after your first completed workout."
+            )
+
+        st.divider()
 
         st.subheader(
             "🕒 Recent Activity"
@@ -1033,6 +1072,17 @@ elif st.session_state.page == "My Profile":
         "Mixed Training",
     ]
 
+    saved_preset = profile.get("program_preset", "Custom")
+    if saved_preset not in PROGRAM_PRESETS:
+        saved_preset = "Custom"
+    program_preset = st.selectbox(
+        "Program Preset",
+        list(PROGRAM_PRESETS),
+        index=list(PROGRAM_PRESETS).index(saved_preset),
+        help="Choose a curated Indian-Western training approach or keep full control.",
+    )
+    st.caption(get_program_preset(program_preset)["description"])
+
     workout_intensities = [
         "Light",
         "Moderate",
@@ -1225,6 +1275,9 @@ elif st.session_state.page == "My Profile":
             else 0
         ),
     )
+    preset_style = get_program_preset(program_preset)["workout_style"]
+    if preset_style:
+        workout_style = preset_style
 
     saved_intensity = profile.get(
         "workout_intensity",
@@ -1288,6 +1341,7 @@ elif st.session_state.page == "My Profile":
             "workout_duration": workout_duration,
             "target_areas": target_areas,
             "workout_style": workout_style,
+            "program_preset": program_preset,
             "workout_intensity": workout_intensity,
             "exercises_enjoy": exercises_enjoy,
             "exercises_to_avoid": exercises_to_avoid,
@@ -1626,6 +1680,7 @@ elif st.session_state.page == "My Workout":
                 workout_history=(
                     st.session_state.workout_history
                 ),
+                profile=st.session_state.profile,
                 history_file=(
                     WORKOUT_HISTORY_FILE
                 ),

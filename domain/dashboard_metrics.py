@@ -187,6 +187,33 @@ def get_completed_workouts_this_week(
     return count
 
 
+def get_weekly_progress(history, weeks=8):
+    """Return dated weekly workout and volume totals for dashboard charts."""
+    today = datetime.now().date()
+    current_week = today - timedelta(days=today.weekday())
+    progress = []
+
+    for offset in range(weeks - 1, -1, -1):
+        week_start = current_week - timedelta(days=offset * 7)
+        week_end = week_start + timedelta(days=6)
+        workouts = [
+            workout
+            for workout in history
+            if (
+                get_workout_date(workout)
+                and week_start <= get_workout_date(workout) <= week_end
+            )
+        ]
+        progress.append(
+            {
+                "Week": week_start.strftime("%d %b"),
+                "Workouts": len(workouts),
+                "Volume (kg)": round(calculate_total_volume(workouts), 1),
+            }
+        )
+    return progress
+
+
 def get_next_workout(
     workout_plan,
     history,

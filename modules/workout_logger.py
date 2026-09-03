@@ -5,6 +5,9 @@ from pathlib import Path
 
 import streamlit as st
 
+from domain.performance import get_progression_target
+from domain.exercise_substitution import get_exercise_substitutions
+
 
 # ============================================================
 # HELPERS
@@ -421,6 +424,7 @@ def render_workout_logger(
     save_supabase_function=None,
     profile_id=None,
     use_supabase=False,
+    profile=None,
 ):
 
     # ============================================================
@@ -491,6 +495,7 @@ def render_workout_logger(
         selected_workout = workout_plan[
             selected_day
         ]
+        profile = profile or {}
 
         exercises = selected_workout.get(
             "exercises",
@@ -689,28 +694,10 @@ def render_workout_logger(
             exercise_name,
         )
 
-        # ============================================================
-        # DOUBLE PROGRESSION ENGINE (ADAPTIVE REPS & WEIGHT)
-        # ============================================================
-        prev_weight = float(previous.get('weight_kg', 0.0)) if previous else 0.0
-        prev_reps = int(previous.get('actual_reps', 0)) if previous else 0
-        
-        # Default starting baselines
-        target_weight = prev_weight if prev_weight > 0.0 else 0.0
-        
-        if prev_weight > 0.0:
-            # If you hit or exceed your planned reps last time, push the volume ceiling
-            if prev_reps >= planned_reps:
-                # Cap rep scaling at an upper hypertrophy limit (e.g., 15 reps)
-                if prev_reps < 15:
-                    target_reps = prev_reps + 1
-                else:
-                    # If you hit 15 reps, trigger a note to buy/increase weights
-                    target_reps = planned_reps 
-            else:
-                target_reps = max(prev_reps, planned_reps)
-        else:
-            target_reps = planned_reps
+        target_weight, target_reps = get_progression_target(
+            previous,
+            planned_reps,
+        )
 
 
         completed_sets = sum(
@@ -731,6 +718,41 @@ def render_workout_logger(
             f"({completed_sets}/{planned_sets} sets)",
             expanded=True,
         ):
+            substitutions = get_exercise_substitutions(
+                exercise,
+                profile,
+            )
+            if substitutions:
+                substitution_names = [
+                    item["name"] for item in substitutions
+                ]
+                selected_substitution = st.selectbox(
+                    "Safer alternative",
+                    ["Keep current exercise"] + substitution_names,
+                    key=f"substitution_{exercise_index}",
+                )
+                if selected_substitution != "Keep current exercise" and st.button(
+                    "Use alternative",
+                    key=f"use_substitution_{exercise_index}",
+                ):
+                    replacement = next(
+                        item
+                        for item in substitutions
+                        if item["name"] == selected_substitution
+                    )
+                    replacement["sets"] = exercise.get(
+                        "planned_sets",
+                        replacement.get("sets", 3),
+                    )
+                    replacement["reps"] = exercise.get(
+                        "planned_reps",
+                        replacement.get("reps", 8),
+                    )
+                    session["exercises"][exercise_index] = _initialize_session(
+                        {"exercises": [replacement]}
+                    )["exercises"][0]
+                    st.session_state.active_workout_session = session
+                    st.rerun()
 
             col1, col2, col3 = st.columns(3)
 
@@ -801,7 +823,9 @@ def render_workout_logger(
                 with col3:
 
                     reps = st.number_input(
-                        f"Reps {target_reps}" if target_weight > 0.0 else f"Reps {target_reps}" if target_weight > 0.0 else "Reps",
+                        f"Reps (Target: {target_reps})"
+                        if target_weight > 0.0
+                        else "Reps",
                         min_value=0,
                         max_value=200,
                         value=int(
