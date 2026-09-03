@@ -1,6 +1,6 @@
 # Fusion Akhada
 
-[![Live app](https://img.shields.io/badge/Live%20app-Streamlit-ff4b4b?logo=streamlit)](https://personal-workout-trainer.streamlit.app/)
+[![Live app](https://img.shields.io/badge/Live%20app-Streamlit-ff4b4b?logo=streamlit)](https://fusion-akhada.streamlit.app/)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab?logo=python)](https://www.python.org/)
 
 Fusion Akhada is an AI-assisted workout planning and progress-tracking application that blends
@@ -11,7 +11,7 @@ and Supabase.
 > Build a plan, train consistently, and use your own performance data to guide
 > the next session.
 
-**Live application:** https://personal-workout-trainer.streamlit.app/
+**Live application:** https://fusion-akhada.streamlit.app/
 
 ## Features
 
