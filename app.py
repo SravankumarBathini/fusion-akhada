@@ -22,31 +22,108 @@ st.set_page_config(
 # ============================================================
 st.markdown("""
 <style>
-    /* Force midnight canvas background matching the sidebar */
-    .stApp, div[data-testid="stAppViewContainer"], .main, [data-testid="stMainSpaceContainer"] {
-        background-color: #171B26 !important;
-        background: #171B26 !important;
-    }
-    
-    /* Enforce high-visibility white typography cross-cohesion */
-    h1, h2, h3, h4, h5, h6, p, label, span, .stMarkdown {
-        color: #FFFFFF !important;
-    }
-    
-    /* Elegant Saffron Highlights for your metric numbers */
-    div[data-testid="stMetricValue"] {
-        color: #FF6B00 !important;
-        font-weight: 800 !important;
-    }
-    div[data-testid="stMetricLabel"] {
-        color: #94A3B8 !important;
+    :root {
+        --canvas: #0f1420;
+        --surface: #171e2d;
+        --surface-raised: #202a3d;
+        --line: rgba(148, 163, 184, 0.18);
+        --muted: #9aa8bd;
+        --accent: #ff8a3d;
+        --accent-soft: rgba(255, 138, 61, 0.14);
     }
 
-    /* Core logging frames */
+    /* Premium midnight canvas with a subtle warm radial glow. */
+    .stApp, div[data-testid="stAppViewContainer"], .main,
+    [data-testid="stMainSpaceContainer"] {
+        background:
+            radial-gradient(circle at 88% 0%, rgba(255, 107, 0, 0.11), transparent 28rem),
+            var(--canvas) !important;
+    }
+
+    [data-testid="stHeader"] {
+        background: transparent !important;
+    }
+
+    div.block-container {
+        max-width: 1440px;
+        padding-top: 2.5rem;
+        padding-bottom: 4rem;
+    }
+
+    /* Enforce high-visibility typography with calmer secondary text. */
+    h1, h2, h3, h4, h5, h6 {
+        letter-spacing: -0.025em;
+        line-height: 1.15;
+    }
+
+    p, label, span, .stMarkdown {
+        color: #f8fafc !important;
+    }
+
+    [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {
+        color: var(--muted) !important;
+    }
+
+    /* Make bordered containers feel like deliberate dashboard cards. */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background: linear-gradient(145deg, rgba(32, 42, 61, 0.88), rgba(23, 30, 45, 0.92));
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
+    }
+
+    /* Elegant saffron highlights for metric numbers. */
+    div[data-testid="stMetricValue"] {
+        color: var(--accent) !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.04em;
+    }
+    div[data-testid="stMetricLabel"] {
+        color: var(--muted) !important;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+
+    /* Consistent controls and premium primary actions. */
     input, select, textarea, div[data-baseweb="input"], .stNumberInput input {
-        background-color: #222533 !important;
+        background-color: var(--surface-raised) !important;
         color: #FFFFFF !important;
-        border: 1px solid #33384F !important;
+        border: 1px solid var(--line) !important;
+        border-radius: 10px !important;
+    }
+
+    .stButton > button {
+        border-radius: 10px;
+        min-height: 2.6rem;
+        font-weight: 700;
+        transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+
+    .stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 18px rgba(255, 107, 0, 0.18);
+    }
+
+    div[data-testid="stProgress"] > div > div {
+        background: linear-gradient(90deg, #ff6b00, #ffc078) !important;
+    }
+
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #151c2b 0%, #101622 100%);
+        border-right: 1px solid var(--line);
+    }
+
+    @media (max-width: 768px) {
+        div.block-container {
+            padding: 1.25rem 1rem 3rem;
+        }
+        h1 {
+            font-size: 2rem !important;
+        }
+        div[data-testid="stMetricValue"] {
+            font-size: 1.35rem;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
