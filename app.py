@@ -393,6 +393,10 @@ from domain.program_presets import PROGRAM_PRESETS, get_program_preset
 st.sidebar.title(
     "🏋️ Personal Workout Trainer"
 )
+st.sidebar.caption(
+    "Fitness guidance only—not medical advice. Consult a qualified professional "
+    "for injuries or medical conditions."
+)
 
 page_options = [
     "Dashboard",
@@ -1779,7 +1783,8 @@ elif st.session_state.page == "My Workout":
                         st.write(f"**Beginner option:** {coaching['modification']}")
                         st.write(f"**Progress when ready:** {coaching['progression']}")
                         st.caption(
-                            "Use a controlled range of motion and stop if you feel sharp pain."
+                            "Fitness guidance only. Use a controlled range of motion and "
+                            "stop if you feel pain, dizziness, or discomfort."
                         )
 
                 st.write(

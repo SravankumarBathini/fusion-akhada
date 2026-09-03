@@ -13,6 +13,12 @@ def render_login_interface():
     with cent_co:
         st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>Personal Workout Trainer</h1>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; color: #6B7280; font-size: 1.1em;'>Athletic Conditioning Gateway</p>", unsafe_allow_html=True)
+        st.warning(
+            "Disclaimer: This app provides general fitness guidance, not medical advice. "
+            "Consult a qualified professional before starting a new program, especially "
+            "if you have an injury or medical condition. Stop if you feel pain, dizziness, "
+            "or discomfort."
+        )
         st.write("")
         
         tab1, tab2 = st.tabs(["Sign In to Dashboard", "Register New Account"])
