@@ -8,13 +8,57 @@ logger = logging.getLogger(__name__)
 
 
 def render_login_interface():
+    st.markdown(
+        """
+        <style>
+        .login-shell {
+            max-width: 680px;
+            margin: 2rem auto 0;
+            padding: 2.5rem 2.75rem 2rem;
+            border: 1px solid rgba(255, 138, 61, 0.28);
+            border-radius: 24px;
+            background: linear-gradient(145deg, rgba(32, 42, 61, 0.96), rgba(18, 24, 37, 0.98));
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+            text-align: center;
+        }
+        .login-mark {
+            display: inline-block;
+            margin-bottom: 0.75rem;
+            padding: 0.55rem 0.8rem;
+            border-radius: 14px;
+            background: rgba(255, 138, 61, 0.14);
+            font-size: 2.4rem;
+        }
+        .login-subtitle {
+            color: #ffb27a;
+            font-size: 1.05rem;
+            letter-spacing: 0.04em;
+        }
+        .login-value {
+            margin: 1.35rem auto 0;
+            color: #cbd5e1;
+            font-size: 0.98rem;
+            line-height: 1.6;
+        }
+        </style>
+        <div class="login-shell">
+            <div class="login-mark">🏋️</div>
+            <h1>Fusion Akhada</h1>
+            <div class="login-subtitle">Ancient discipline. Modern performance.</div>
+            <div class="login-value">
+                Personalized training that brings Indian movement traditions
+                together with modern strength and conditioning.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     left_co, cent_co, last_co = st.columns([1, 2, 1])
     
     with cent_co:
-        st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>Fusion Akhada</h1>", unsafe_allow_html=True)
         st.markdown(
-            "<p style='text-align: center; color: #6B7280; font-size: 1.1em;'>"
-            "Ancient discipline. Modern performance.</p>",
+            "<p style='text-align: center; color: #9aa8bd; font-size: 0.95em;'>"
+            "Your training journey starts here.</p>",
             unsafe_allow_html=True,
         )
         st.warning(
