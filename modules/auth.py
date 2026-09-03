@@ -2,6 +2,7 @@
 
 import streamlit as st
 from utils.storage import _get_supabase_client
+from infrastructure.registration_notifications import record_registration
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,11 @@ def render_login_interface():
                     else:
                         try:
                             res = client.auth.sign_up({"email": new_email, "password": new_password})
+                            user_id = getattr(res.user, "id", None) if res.user else None
+                            try:
+                                record_registration(new_email.strip().lower(), user_id)
+                            except Exception as error:
+                                logger.exception("Registration audit failed: %s", error)
                             logger.info("Account registration requested")
                             st.info("Registration email transmitted! Check your inbox to confirm your profile.")
                         except Exception as e:

@@ -1,6 +1,8 @@
 import modules.auth as auth
 from infrastructure.storage import reset_user_progress_soft
+from infrastructure.registration_notifications import load_registration_events
 from config.logging_config import configure_logging
+from config.secrets import get_secret
 
 import json
 import logging
@@ -397,6 +399,16 @@ page_options = [
     "Progress",
     "AI Coach",
 ]
+
+current_user = st.session_state.get("user")
+admin_email = get_secret("ADMIN_EMAIL")
+current_user_email = (
+    current_user.get("email")
+    if isinstance(current_user, dict)
+    else getattr(current_user, "email", None)
+)
+if admin_email and current_user_email and current_user_email.lower() == admin_email.lower():
+    page_options.append("Admin: Registrations")
 
 if (
     st.session_state.page
@@ -2475,6 +2487,19 @@ elif st.session_state.page == "Progress":
 # ============================================================
 # AI COACH
 # ============================================================
+
+elif st.session_state.page == "Admin: Registrations":
+    st.title("Admin Dashboard")
+    st.caption("Registration activity visible only to the configured administrator.")
+    events = load_registration_events()
+    if events:
+        st.metric("Registered users", len(events))
+        st.dataframe(events, use_container_width=True, hide_index=True)
+    else:
+        st.info(
+            "No registration events found. Configure the server-only "
+            "SUPABASE_SERVICE_ROLE_KEY and run database/002_registration_events.sql."
+        )
 
 elif st.session_state.page == "AI Coach":
 

@@ -102,6 +102,8 @@ New reusable logic should be added to the corresponding `domain`,
    - Run `database/001_add_profile_ownership.sql` in the Supabase SQL Editor.
      This enables RLS for profiles, workout plans, and workout history.
    - Confirm `profiles.user_id` exists before creating profiles.
+   - Run `database/002_registration_events.sql` and configure the server-only
+     `SUPABASE_SERVICE_ROLE_KEY` plus `ADMIN_EMAIL` to enable the admin dashboard.
 
 For Streamlit Community Cloud, add the same values under
 **App settings -> Secrets**. Never commit API keys or `.streamlit/secrets.toml`.
