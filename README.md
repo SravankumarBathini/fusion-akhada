@@ -106,6 +106,10 @@ New reusable logic should be added to the corresponding `domain`,
 For Streamlit Community Cloud, add the same values under
 **App settings -> Secrets**. Never commit API keys or `.streamlit/secrets.toml`.
 
+The hosted server configuration enables headless mode and CSRF protection,
+disables usage-stat collection, and records authentication/storage diagnostics
+without logging tokens or workout payloads.
+
 ## Validation
 
 Run the built-in regression tests before deployment:

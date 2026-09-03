@@ -1,10 +1,15 @@
 import modules.auth as auth
 from infrastructure.storage import reset_user_progress_soft
+from config.logging_config import configure_logging
 
 import json
+import logging
 from datetime import datetime
 
 import streamlit as st
+
+configure_logging()
+logger = logging.getLogger(__name__)
 
 from application.data_loader import load_persistent_data as _load_persistent_data
 from config.settings import DATA_DIR
@@ -447,6 +452,7 @@ if st.sidebar.button("🚪 Log Out of Session", use_container_width=True):
     except Exception as error:
         st.error(f"Could not end the Supabase session: {error}")
     else:
+        logger.info("Authentication session ended")
         st.session_state.clear()
         st.success("Signed out securely. Your cloud data was not deleted.")
         st.rerun()
