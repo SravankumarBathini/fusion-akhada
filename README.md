@@ -51,8 +51,8 @@ app.py           # Streamlit entry point
 ## Local setup
 
 ```powershell
-git clone https://github.com/SravankumarBathini/personal-workout-trainer.git
-cd personal-workout-trainer
+git clone https://github.com/SravankumarBathini/fusion-akhada.git
+cd fusion-akhada
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
