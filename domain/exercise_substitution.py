@@ -1,5 +1,6 @@
 """Safe exercise substitutions based on training focus and equipment."""
 
+import functools
 from typing import Any
 
 from domain.exercise_rules import normalize_text
@@ -71,6 +72,46 @@ def _matches_equipment(required: str, available: set[str]) -> bool:
     return required_text in available
 
 
+@functools.lru_cache(maxsize=128)
+def _cached_substitution_candidates(
+    source_name: str,
+    focus: str,
+    avoided: str,
+    available_frozen: tuple[str, ...],
+    limit: int,
+) -> tuple[tuple[str, str, str, str], ...]:
+    """Return substitution (name, equipment, muscle, pattern) tuples cached.
+
+    Takes only hashable primitives (strings + tuple of strings) so the
+    result can live in ``lru_cache`` across all workout renders.  The
+    public wrapper re-attaches the caller's ``exercise`` fields afterwards
+    so we avoid hashing dict inputs.
+    """
+    available_set = set(available_frozen)
+    avoided_set = set(a.strip() for a in avoided.split(",") if a.strip()) if avoided else set()
+
+    key = next(
+        (catalog_key for catalog_key in SUBSTITUTION_CATALOG if catalog_key in focus),
+        None,
+    )
+    if key is None:
+        return tuple()
+
+    substitutions: list[tuple[str, str, str, str]] = []
+    for name, equipment, muscle, pattern in SUBSTITUTION_CATALOG[key]:
+        candidate_name = normalize_text(name)
+        if candidate_name == source_name:
+            continue
+        if avoided_set and any(normalize_text(a) == candidate_name for a in avoided_set):
+            continue
+        if not _matches_equipment(equipment, available_set):
+            continue
+        substitutions.append((name, equipment, muscle, pattern))
+        if len(substitutions) >= max(1, limit):
+            break
+    return tuple(substitutions)
+
+
 def get_exercise_substitutions(
     exercise: dict[str, Any],
     profile: dict[str, Any],
@@ -83,21 +124,22 @@ def get_exercise_substitutions(
         or exercise.get("movement_pattern")
         or "full body"
     )
-    avoided = normalize_text(profile.get("exercises_to_avoid", ""))
-    available = _available_equipment(profile)
+    avoided_raw = profile.get("exercises_to_avoid") or ""
+    avoided = normalize_text(
+        ",".join(avoided_raw) if isinstance(avoided_raw, list) else str(avoided_raw)
+    )
+    available_frozen = tuple(sorted(_available_equipment(profile)))
 
-    key = next((key for key in SUBSTITUTION_CATALOG if key in focus), None)
-    if key is None:
-        return []
+    cached = _cached_substitution_candidates(
+        source_name,
+        focus,
+        avoided,
+        available_frozen,
+        int(limit),
+    )
 
-    substitutions = []
-    for name, equipment, muscle, pattern in SUBSTITUTION_CATALOG[key]:
-        if normalize_text(name) == source_name:
-            continue
-        if avoided and normalize_text(name) in avoided:
-            continue
-        if not _matches_equipment(equipment, available):
-            continue
+    substitutions: list[dict[str, Any]] = []
+    for name, equipment, muscle, pattern in cached:
         replacement = dict(exercise)
         replacement.update(
             {
@@ -108,6 +150,4 @@ def get_exercise_substitutions(
             }
         )
         substitutions.append(replacement)
-        if len(substitutions) >= max(1, limit):
-            break
     return substitutions

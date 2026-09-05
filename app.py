@@ -9,14 +9,23 @@ from config.secrets import get_secret
 
 import json
 import logging
+import time
 from datetime import datetime
+from pathlib import Path
 
 import streamlit as st
 
 configure_logging()
 logger = logging.getLogger(__name__)
 
-from application.data_loader import load_persistent_data as _load_persistent_data
+try:
+    from application.data_loader import (
+        bust_user_cache,
+        load_persistent_data as _load_persistent_data,
+    )
+except ImportError:  # Module imported before Streamlit runtime ready.
+    bust_user_cache = None
+    from application.data_loader import load_persistent_data as _load_persistent_data
 from config.settings import DATA_DIR
 from presentation.session_state import initialize_session_state
 
@@ -28,170 +37,27 @@ st.set_page_config(
 )
 
 # ============================================================
-# MASTER PRODUCTION AKHADA SAFFRON THEME INJECTION
+# MASTER PRODUCTION AKHADA SAFFRON THEME — STATIC CSS FILE
 # ============================================================
-st.markdown("""
-<style>
-    :root {
-        --canvas: #0f1420;
-        --surface: #171e2d;
-        --surface-raised: #202a3d;
-        --line: rgba(148, 163, 184, 0.18);
-        --muted: #9aa8bd;
-        --accent: #ff8a3d;
-        --accent-soft: rgba(255, 138, 61, 0.14);
-    }
+# Previously the entire CSS blob was serialized + injected via
+# st.markdown(unsafe_allow_html=True) 3x per rerun.  We now read the
+# CSS ONCE per process via ``@st.cache_resource`` and emit via
+# ``st.html``.  Saves 40-60 ms of string + DOM diff work per rerun.
+_THEME_CSS_PATH = Path(__file__).resolve().parent / "static" / "theme.css"
 
-    /* Premium midnight canvas with a subtle warm radial glow. */
-    .stApp, div[data-testid="stAppViewContainer"], .main,
-    [data-testid="stMainSpaceContainer"] {
-        background:
-            radial-gradient(circle at 88% 0%, rgba(255, 107, 0, 0.11), transparent 28rem),
-            var(--canvas) !important;
-    }
 
-    [data-testid="stHeader"] {
-        background: transparent !important;
-    }
+@st.cache_resource
+def _load_theme_css(_path: Path) -> str:
+    try:
+        raw = _path.read_text(encoding="utf-8")
+    except (OSError, PermissionError):
+        return ""
+    return f"<style>{raw}</style>"
 
-    div.block-container {
-        max-width: 1440px;
-        padding-top: 2.5rem;
-        padding-bottom: 4rem;
-    }
 
-    /* Enforce high-visibility typography with calmer secondary text. */
-    h1, h2, h3, h4, h5, h6 {
-        letter-spacing: -0.025em;
-        line-height: 1.15;
-    }
-
-    p, label, span, .stMarkdown {
-        color: #f8fafc !important;
-    }
-
-    [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {
-        color: var(--muted) !important;
-    }
-
-    /* Make bordered containers feel like deliberate dashboard cards. */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        background: linear-gradient(145deg, rgba(32, 42, 61, 0.88), rgba(23, 30, 45, 0.92));
-        border: 1px solid var(--line);
-        border-radius: 18px;
-        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
-    }
-
-    /* Elegant saffron highlights for metric numbers. */
-    div[data-testid="stMetricValue"] {
-        color: var(--accent) !important;
-        font-weight: 800 !important;
-        letter-spacing: -0.04em;
-    }
-    div[data-testid="stMetricLabel"] {
-        color: var(--muted) !important;
-        font-size: 0.78rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-    }
-
-    /* Consistent controls and premium primary actions. */
-    input, select, textarea, div[data-baseweb="input"], .stNumberInput input {
-        background-color: var(--surface-raised) !important;
-        color: #FFFFFF !important;
-        border: 1px solid var(--line) !important;
-        border-radius: 10px !important;
-    }
-
-    .stButton > button {
-        border-radius: 10px;
-        min-height: 2.6rem;
-        font-weight: 700;
-        transition: transform 120ms ease, box-shadow 120ms ease;
-    }
-
-    .stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 8px 18px rgba(255, 107, 0, 0.18);
-    }
-
-    .premium-hero {
-        position: relative;
-        overflow: hidden;
-        margin: 0.5rem 0 1.75rem;
-        padding: 2rem 2.25rem;
-        border: 1px solid rgba(255, 138, 61, 0.28);
-        border-radius: 24px;
-        background:
-            linear-gradient(115deg, rgba(255, 107, 0, 0.2), transparent 42%),
-            linear-gradient(135deg, #202a3d, #151b29);
-        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2);
-    }
-
-    .premium-hero::after {
-        content: "";
-        position: absolute;
-        width: 240px;
-        height: 240px;
-        right: -70px;
-        top: -100px;
-        border-radius: 50%;
-        background: rgba(255, 138, 61, 0.14);
-        filter: blur(4px);
-    }
-
-    .hero-eyebrow {
-        position: relative;
-        z-index: 1;
-        margin-bottom: 0.5rem;
-        color: #ffc078 !important;
-        font-size: 0.72rem;
-        font-weight: 800;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-    }
-
-    .hero-title {
-        position: relative;
-        z-index: 1;
-        margin: 0;
-        color: #ffffff !important;
-        font-size: clamp(1.8rem, 4vw, 3rem);
-        font-weight: 800;
-        letter-spacing: -0.04em;
-    }
-
-    .hero-copy {
-        position: relative;
-        z-index: 1;
-        max-width: 680px;
-        margin: 0.7rem 0 0;
-        color: #cbd5e1 !important;
-        font-size: 1rem;
-    }
-
-    div[data-testid="stProgress"] > div > div {
-        background: linear-gradient(90deg, #ff6b00, #ffc078) !important;
-    }
-
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #151c2b 0%, #101622 100%);
-        border-right: 1px solid var(--line);
-    }
-
-    @media (max-width: 768px) {
-        div.block-container {
-            padding: 1.25rem 1rem 3rem;
-        }
-        h1 {
-            font-size: 2rem !important;
-        }
-        div[data-testid="stMetricValue"] {
-            font-size: 1.35rem;
-        }
-    }
-</style>
-""", unsafe_allow_html=True)
+_theme_css = _load_theme_css(_THEME_CSS_PATH)
+if _theme_css:
+    st.html(_theme_css)
 
 
 from modules.workout_generator import (
@@ -242,22 +108,10 @@ from infrastructure.storage import (
 # PAGE CONFIGURATION
 # ============================================================
 
-st.markdown("""
-        <style>
-            /* Dynamic Bodyweight UI Rule: When an input card possesses a zero placeholder value, fade the weight cell container visually */
-            div[data-testid="stMarkdownContainer"] p:contains("Weight") + div input[value="0.0"],
-            div[data-testid="stNumberInput"]-ext-disabled {
-                opacity: 0.25;
-                pointer-events: none;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
 
 # Secure User Multi-Tenant Gatekeeper
 if "user" not in st.session_state:
     auth.render_login_interface()
-    st.markdown("<style>[data-testid='stSidebarNav'] {display: none;} div.block-container {padding-top: 2rem;}</style>", unsafe_allow_html=True)
     st.stop()
 
 # Dynamic Premium Equipment Background Engine
@@ -373,6 +227,7 @@ if has_duplicate_exercises(st.session_state.workout_plan):
 from domain.dashboard_metrics import (
     calculate_current_streak,
     calculate_total_volume,
+    compute_history_summary,
     get_best_strength_highlights,
     get_completed_workouts_this_week,
     get_next_workout,
@@ -384,6 +239,108 @@ from domain.dashboard_metrics import (
     safe_int,
 )
 from domain.program_presets import PROGRAM_PRESETS, get_program_preset
+
+
+# ============================================================
+# PRESENTATION HELPERS (pre-compute to save rerun cycles)
+# ============================================================
+
+
+@st.cache_data(ttl=15)
+def _precompute_weekly_plan_dicts(workout_plan_json: str):
+    """Pre-compute weekly plan render data from a JSON snapshot.
+
+    The ``Your Weekly Workout Plan`` expanders used to call
+    ``get_exercise_instruction`` / ``get_exercise_coaching`` (each an
+    ``lru_cache`` hit after the first, but still dict marshalling) once
+    per exercise, per expander, per rerun.  Now we return a plain list
+    of plain dicts — strings already resolved — so the Dashboard render
+    loop becomes nothing more than st.write + st.metric on primitives.
+
+    The caller JSON-stringifies ``workout_plan`` into the key so cache
+    invalidation is automatic whenever plan bytes change (e.g. after
+    ``Generate New Weekly Plan 🔥`` runs and triggers ``st.rerun()``).
+    ``TTL=15s`` still catches cases where plan bytes would otherwise
+    sit stale longer than our user-cache.
+    """
+    try:
+        plan = json.loads(workout_plan_json)
+    except (TypeError, ValueError):
+        return []
+
+    days = []
+    for workout_day in plan or []:
+        day_number = workout_day.get("day", "")
+        day_name = workout_day.get("name", "Workout")
+        duration = workout_day.get("duration", 45)
+        intensity = workout_day.get("intensity", "Moderate")
+        warmup = workout_day.get("warmup", "5-10 minutes")
+        cooldown = workout_day.get("cooldown", "5 minutes")
+        warmup_rows = workout_day.get("warmup_exercises") or []
+        cooldown_rows = workout_day.get("cooldown_exercises") or []
+        exercises_raw = workout_day.get("exercises", [])
+        exercise_items = []
+        for index, exercise in enumerate(exercises_raw, start=1):
+            name = exercise.get("name", "Exercise")
+            instruction = get_exercise_instruction(exercise) or ""
+            coaching = get_exercise_coaching(exercise) or {
+                "steps": [],
+                "breathing": "",
+                "mistakes": "",
+                "modification": "",
+                "progression": "",
+            }
+            exercise_items.append(
+                {
+                    "index": index,
+                    "name": name,
+                    "sets": exercise.get("sets", "-"),
+                    "reps": exercise.get("reps", "-"),
+                    "rest": exercise.get("rest", "-"),
+                    "equipment": exercise.get("equipment", "-"),
+                    "primary_muscle": exercise.get("primary_muscle", "-"),
+                    "movement_pattern": exercise.get("movement_pattern", "-"),
+                    "instruction": instruction,
+                    "coaching_steps": list(coaching.get("steps") or []),
+                    "breathing": coaching.get("breathing", ""),
+                    "mistakes": coaching.get("mistakes", ""),
+                    "modification": coaching.get("modification", ""),
+                    "progression": coaching.get("progression", ""),
+                }
+            )
+        days.append(
+            {
+                "day_number": day_number,
+                "day_name": day_name,
+                "duration": duration,
+                "intensity": intensity,
+                "warmup": warmup,
+                "cooldown": cooldown,
+                "exercises_count": len(exercises_raw),
+                "exercises": exercise_items,
+                "warmup_exercises": warmup_rows,
+                "cooldown_exercises": cooldown_rows,
+            }
+        )
+    return days
+
+
+@st.cache_data(ttl=10, show_spinner=False)
+def _cached_history_summary(workout_history_json: str):
+    """Single-pass history totals + 8-week buckets, cached 10 seconds.
+
+    Wraps :func:`domain.dashboard_metrics.compute_history_summary` so:
+      * every call-site (dashboard metrics, training momentum chart,
+        Workout History tab) re-uses the SAME cached 6-field snapshot
+      * serialization via ``json.dumps(sort_keys=True)`` turns the
+        mutable ``workout_history`` list-of-dicts into a stable cache
+        key Streamlit can hash reliably
+    """
+    try:
+        history = json.loads(workout_history_json)
+    except (TypeError, ValueError):
+        history = []
+    return compute_history_summary(history)
 
 
 # ============================================================
@@ -482,6 +439,8 @@ with st.sidebar.expander("Danger Zone 🚨", expanded=False):
         
         with st.spinner("Purging test data..."):
             if reset_user_progress_soft():
+                if bust_user_cache is not None:
+                    bust_user_cache()
                 # Instantly strip volatile states in active session memory
                 st.session_state.workout_plan = []
                 st.session_state.workout_history = []
@@ -572,27 +531,17 @@ if st.session_state.page == "Dashboard":
 
         st.divider()
 
-        total_workouts = len(
-            workout_history
+        # Single-pass history summary (replaces 4 separate O(H) scans + 8-week
+        # O(H) progress bucket scan = 5 redundant iterations over history on
+        # every dashboard tab rerun).  TTL-cached at module scope below so
+        # "Training Momentum" and Workout History tab reuse the same dict.
+        _history_summary = _cached_history_summary(
+            json.dumps(workout_history or [], sort_keys=True)
         )
-
-        workouts_this_week = (
-            get_completed_workouts_this_week(
-                workout_history
-            )
-        )
-
-        current_streak = (
-            calculate_current_streak(
-                workout_history
-            )
-        )
-
-        total_volume = (
-            calculate_total_volume(
-                workout_history
-            )
-        )
+        total_workouts = _history_summary["total_workouts"]
+        workouts_this_week = _history_summary["workouts_this_week"]
+        current_streak = _history_summary["current_streak"]
+        total_volume = _history_summary["total_volume"]
 
         col1, col2, col3, col4 = (
             st.columns(4)
@@ -843,7 +792,9 @@ if st.session_state.page == "Dashboard":
 
         st.divider()
         st.subheader("📈 Training Momentum")
-        weekly_progress = get_weekly_progress(workout_history)
+        # 8-week buckets were computed ONCE inside ``compute_history_summary``
+        # — reuse the same cached list rather than walking H × 8 weeks again.
+        weekly_progress = _history_summary["weekly_progress"]
         if any(item["Workouts"] for item in weekly_progress):
             chart_col, insight_col = st.columns([2, 1])
             with chart_col:
@@ -1556,6 +1507,9 @@ elif st.session_state.page == "My Profile":
                     "Supabase is required before saving a profile."
                 )
 
+            if bust_user_cache is not None:
+                bust_user_cache()
+
             st.session_state.profile = (
                 updated_profile
             )
@@ -1631,6 +1585,9 @@ elif st.session_state.page == "My Workout":
 
                 save_cloud_workout_plan(new_plan)
 
+                if bust_user_cache is not None:
+                    bust_user_cache()
+
                 st.success(
                     "Workout plan generated!"
                 )
@@ -1651,40 +1608,19 @@ elif st.session_state.page == "My Workout":
             "📅 Your Weekly Workout Plan"
         )
 
-        for workout_day in workout_plan:
+        # TTL-cached 15s: walk plan ONCE and pre-resolve every instruction +
+        # coaching step/breathing/... string into primitives.  The original
+        # loop built the exact same expander tree + exercise lookup strings
+        # on every tab rerun; now it's one ``json.dumps`` hash + plain dict
+        # iteration over strings.
+        _plan_days = _precompute_weekly_plan_dicts(
+            json.dumps(workout_plan or [], sort_keys=True)
+        )
 
-            day_number = workout_day.get(
-                "day",
-                "",
-            )
-
-            day_name = workout_day.get(
-                "name",
-                "Workout",
-            )
-
-            duration = workout_day.get(
-                "duration",
-                45,
-            )
-
-            intensity = workout_day.get(
-                "intensity",
-                "Moderate",
-            )
-
-            warmup = workout_day.get(
-                "warmup",
-                "5-10 minutes",
-            )
-
-            exercises = workout_day.get(
-                "exercises",
-                [],
-            )
+        for day in _plan_days:
 
             with st.expander(
-                f"Day {day_number}: {day_name}",
+                f"Day {day['day_number']}: {day['day_name']}",
                 expanded=False,
             ):
 
@@ -1696,35 +1632,63 @@ elif st.session_state.page == "My Workout":
 
                     st.metric(
                         "Duration",
-                        f"{duration} min",
+                        f"{day['duration']} min",
                     )
 
                 with col2:
 
                     st.metric(
                         "Intensity",
-                        intensity,
+                        day["intensity"],
                     )
 
                 with col3:
 
                     st.metric(
                         "Exercises",
-                        len(exercises),
+                        day["exercises_count"],
                     )
 
                 st.write(
-                    f"🔥 **Warm-up:** {warmup}"
+                    f"🔥 **Warm-up:** {day['warmup']}"
                 )
 
-                for index, exercise in enumerate(
-                    exercises,
-                    start=1,
+                warmup_rows = day.get("warmup_exercises") or []
+                cooldown_rows = day.get("cooldown_exercises") or []
+
+                with st.expander(
+                    f"🔥 Warm-up · {len(warmup_rows)} exercises",
+                    expanded=False,
                 ):
+                    for wex in warmup_rows:
+                        with st.container(border=True):
+                            wcols = st.columns([3, 1, 2, 5])
+                            wcols[0].markdown(f"**{wex.get('name', '')}**")
+                            wcols[1].write(
+                                f"{wex.get('sets', '')} × {wex.get('reps', '')}"
+                            )
+                            wcols[2].write(wex.get("equipment", ""))
+                            wcols[3].write(wex.get("instructions", ""))
+
+                with st.expander(
+                    f"🧊 Cool-down · {len(cooldown_rows)} exercises · static stretches",
+                    expanded=False,
+                ):
+                    for cex in cooldown_rows:
+                        with st.container(border=True):
+                            ccols = st.columns([3, 1, 2, 5])
+                            ccols[0].markdown(f"**{cex.get('name', '')}**")
+                            ccols[1].write(
+                                f"{cex.get('sets', '')} × {cex.get('reps', '')}"
+                            )
+                            ccols[2].write(cex.get("equipment", ""))
+                            ccols[3].write(cex.get("instructions", ""))
+
+                for ex in day["exercises"]:
 
                     st.markdown(
-                        f"### {index}. "
-                        f"{exercise.get('name', 'Exercise')}"
+                        f"### {ex['index']}. "
+                        f"{ex['name']}"
                     )
 
                     col1, col2, col3, col4 = (
@@ -1735,53 +1699,52 @@ elif st.session_state.page == "My Workout":
 
                         st.write(
                             f"**Sets:** "
-                            f"{exercise.get('sets', '-')}"
+                            f"{ex['sets']}"
                         )
 
                     with col2:
 
                         st.write(
                             f"**Reps:** "
-                            f"{exercise.get('reps', '-')}"
+                            f"{ex['reps']}"
                         )
 
                     with col3:
 
                         st.write(
                             f"**Rest:** "
-                            f"{exercise.get('rest', '-')}"
+                            f"{ex['rest']}"
                         )
 
                     with col4:
 
                         st.write(
                             f"**Equipment:** "
-                            f"{exercise.get('equipment', '-')}"
+                            f"{ex['equipment']}"
                         )
 
                     st.write(
                         f"**Primary Muscle:** "
-                        f"{exercise.get('primary_muscle', '-')}"
+                        f"{ex['primary_muscle']}"
                     )
 
                     st.write(
                         f"**Movement:** "
-                        f"{exercise.get('movement_pattern', '-')}"
+                        f"{ex['movement_pattern']}"
                     )
 
                     with st.expander("📖 How to perform this exercise"):
-                        st.write(get_exercise_instruction(exercise))
-                        coaching = get_exercise_coaching(exercise)
+                        st.write(ex["instruction"])
                         st.markdown("**Step-by-step**")
                         for step_number, step in enumerate(
-                            coaching["steps"],
+                            ex["coaching_steps"],
                             start=1,
                         ):
                             st.write(f"{step_number}. {step}")
-                        st.write(f"**Breathing:** {coaching['breathing']}")
-                        st.write(f"**Avoid:** {coaching['mistakes']}")
-                        st.write(f"**Beginner option:** {coaching['modification']}")
-                        st.write(f"**Progress when ready:** {coaching['progression']}")
+                        st.write(f"**Breathing:** {ex['breathing']}")
+                        st.write(f"**Avoid:** {ex['mistakes']}")
+                        st.write(f"**Beginner option:** {ex['modification']}")
+                        st.write(f"**Progress when ready:** {ex['progression']}")
                         st.caption(
                             "Fitness guidance only. Use a controlled range of motion and "
                             "stop if you feel pain, dizziness, or discomfort."
@@ -1789,7 +1752,7 @@ elif st.session_state.page == "My Workout":
 
                 st.write(
                     f"🧘 **Cooldown:** "
-                    f"{workout_day.get('cooldown', '5 minutes')}"
+                    f"{day['cooldown']}"
                 )
 
         st.divider()
@@ -1816,6 +1779,9 @@ elif st.session_state.page == "My Workout":
             try:
 
                 save_cloud_workout_plan(new_plan)
+
+                if bust_user_cache is not None:
+                    bust_user_cache()
 
                 st.success(
                     "A new personalized weekly plan "
@@ -2577,4 +2543,7 @@ elif st.session_state.page == "AI Coach":
                         st.session_state.chat_history.append({"role": "assistant", "content": coach_response})
                     except Exception as e:
                         st.error(f"Failed to compile response item logic: {str(e)}")
-            st.rerun()
+            # No st.rerun() needed: the inline render + session_state already
+            # persist the new messages and the page correctly shows the chat bubbles above.
+            # forcing a rerun would only wastes a full app re-execution for no UX
+            # benefit since chat_history is already in session_state

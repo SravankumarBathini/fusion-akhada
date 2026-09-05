@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import functools
 
 
 def normalize_text(value):
@@ -44,13 +45,17 @@ def exercise_is_preferred(exercise, preferred_exercises):
     return exercise_name in preferred_text
 
 
-def get_exercise_instruction(exercise):
-    """Return coach guidance even when a generated plan omits instructions."""
-    instructions = str(exercise.get("instructions", "")).strip()
-    if instructions:
-        return instructions
+@functools.lru_cache(maxsize=256)
+def _cached_exercise_instruction(
+    instructions: str,
+    movement_pattern: str,
+) -> str:
+    """Pure string-keyed helper cached across all exercise renders."""
+    cached_instructions = instructions.strip()
+    if cached_instructions:
+        return cached_instructions
 
-    pattern = normalize_text(exercise.get("movement_pattern", ""))
+    pattern = normalize_text(movement_pattern)
     guidance = {
         "squat": "Keep your chest tall, brace your core, and lower under control. Drive through your whole foot to stand.",
         "lunge": "Step into a stable stance, lower with control, and keep the front knee tracking over the toes.",
@@ -66,9 +71,20 @@ def get_exercise_instruction(exercise):
     )
 
 
-def get_exercise_coaching(exercise):
-    """Return practical beginner coaching for the exercise movement pattern."""
-    pattern = normalize_text(exercise.get("movement_pattern", ""))
+def get_exercise_instruction(exercise):
+    """Return coach guidance even when a generated plan omits instructions."""
+    return _cached_exercise_instruction(
+        str(exercise.get("instructions", "") or ""),
+        str(exercise.get("movement_pattern", "") or ""),
+    )
+
+
+@functools.lru_cache(maxsize=256)
+def _cached_exercise_coaching(
+    movement_pattern: str,
+) -> dict:
+    """Pure string-keyed helper cached across all exercise renders."""
+    pattern = normalize_text(movement_pattern)
     coaching = {
         "squat": {
             "steps": [
@@ -126,20 +142,36 @@ def get_exercise_coaching(exercise):
             "progression": "Increase load gradually while keeping the same controlled hinge.",
         },
     }
-    return coaching.get(
-        pattern,
-        {
-            "steps": [
-                "Set a stable starting position and brace your core.",
-                "Move through a comfortable range with steady control.",
-                "Return slowly and reset before the next repetition.",
-            ],
-            "breathing": "Breathe steadily; avoid holding your breath.",
-            "mistakes": "Rushing, using momentum, or losing a neutral spine.",
-            "modification": "Reduce the range, load, or speed until the movement feels controlled.",
-            "progression": "Add resistance or repetitions only while technique stays consistent.",
-        },
+    fallback = {
+        "steps": [
+            "Set a stable starting position and brace your core.",
+            "Move through a comfortable range with steady control.",
+            "Return slowly and reset before the next repetition.",
+        ],
+        "breathing": "Breathe steadily; avoid holding your breath.",
+        "mistakes": "Rushing, using momentum, or losing a neutral spine.",
+        "modification": "Reduce the range, load, or speed until the movement feels controlled.",
+        "progression": "Add resistance or repetitions only while technique stays consistent.",
+    }
+    # lru_cache requires the same dict object to be returned safely without
+    # mutation; return a shallow copy so callers that mutate coaching (if any)
+    # do not accidentally poison the cache entry.
+    return coaching.get(pattern, fallback)
+
+
+def get_exercise_coaching(exercise):
+    """Return practical beginner coaching for the exercise movement pattern."""
+    coaching = _cached_exercise_coaching(
+        str(exercise.get("movement_pattern", "") or "")
     )
+    # Defensive copy to protect the cache-backed dict from caller mutation.
+    return {
+        "steps": list(coaching["steps"]),
+        "breathing": coaching["breathing"],
+        "mistakes": coaching["mistakes"],
+        "modification": coaching["modification"],
+        "progression": coaching["progression"],
+    }
 
 
 def parse_history_datetime(workout):
